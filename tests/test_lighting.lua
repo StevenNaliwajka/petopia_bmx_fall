@@ -276,3 +276,33 @@ T.test("lighting: the grade adds contrast and keeps the colour (no lift, no wash
     local f = def.mood.fog
     T.ok(f.start >= 2500, "the haze stays off the park: starts at " .. f.start)
 end)
+
+T.test("build: a lighting step that fails can never ship an unlit map", function()
+    local bsp = ROOT .. "/maps/petopia_bmx_fall.bsp"
+    local function lit(path)
+        local ok = os.execute("python3 " .. ROOT .. "/tools/check-bsp-lit.py '" .. path .. "' >/dev/null 2>&1")
+        return ok == 0 or ok == true
+    end
+    T.ok(lit(bsp), "the shipped BSP carries baked light")
+    -- the same BSP with its lighting lump emptied, as vbsp leaves it
+    local f = assert(io.open(bsp, "rb")) local data = f:read("*a") f:close()
+    local at = 8 + 8 * 16 + 4                       -- lump 8's length field
+    local unlit = data:sub(1, at) .. "\0\0\0\0" .. data:sub(at + 5)
+    local tmp = os.tmpname()
+    local g = assert(io.open(tmp, "wb")) g:write(unlit) g:close()
+    T.ok(not lit(tmp), "an unlit BSP is refused")
+    os.remove(tmp)
+    -- and the build runs the check on what vrad wrote, stopping on failure
+    local sh = assert(io.open(ROOT .. "/tools/build-map.sh")):read("*a")
+    local v = sh:find("run vrad.exe", 1, true)
+    local c = sh:find("check-bsp-lit.py", v or 1, true)
+    T.ok(v and c and c > v, "build-map.sh checks the BSP after vrad")
+    T.ok(sh:find("vrad failed, stopping", 1, true), "build-map.sh stops when vrad fails")
+end)
+
+T.test("build: the navmesh was saved against this BSP (rebuild or restamp it after a relight)", function()
+    local nav = assert(io.open(ROOT .. "/maps/petopia_bmx_fall.nav", "rb")):read("*a")
+    local bsp = assert(io.open(ROOT .. "/maps/petopia_bmx_fall.bsp", "rb")):read("*a")
+    local b1, b2, b3, b4 = nav:byte(13, 16)
+    T.eq(b1 + b2 * 256 + b3 * 65536 + b4 * 16777216, #bsp, "the .nav's recorded BSP size")
+end)

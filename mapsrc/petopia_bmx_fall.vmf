@@ -10451,7 +10451,7 @@ entity
 {
 	"id" "1045"
 	"classname" "light"
-	"origin" "3481 630 476"
+	"origin" "2955 630 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10463,7 +10463,7 @@ entity
 {
 	"id" "1046"
 	"classname" "light"
-	"origin" "3120 -1654 476"
+	"origin" "3321 630 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10475,7 +10475,7 @@ entity
 {
 	"id" "1047"
 	"classname" "light"
-	"origin" "-118 -733 476"
+	"origin" "3120 -1654 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10487,7 +10487,7 @@ entity
 {
 	"id" "1048"
 	"classname" "light"
-	"origin" "-118 -360 476"
+	"origin" "-118 -613 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10499,7 +10499,7 @@ entity
 {
 	"id" "1049"
 	"classname" "light"
-	"origin" "3446 -738 476"
+	"origin" "-118 -200 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10511,7 +10511,7 @@ entity
 {
 	"id" "1050"
 	"classname" "light"
-	"origin" "3446 -174 476"
+	"origin" "3446 -738 476"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10523,19 +10523,19 @@ entity
 {
 	"id" "1051"
 	"classname" "light"
-	"origin" "-144 -1664 440"
-	"_light" "236 214 196 60"
+	"origin" "3446 390 476"
+	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
 	"style" "0"
-	"_fifty_percent_distance" "420"
-	"_zero_percent_distance" "1100"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
 }
 entity
 {
 	"id" "1052"
 	"classname" "light"
-	"origin" "-144 -1280 440"
+	"origin" "-144 -1664 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10547,7 +10547,7 @@ entity
 {
 	"id" "1053"
 	"classname" "light"
-	"origin" "-144 -896 440"
+	"origin" "-144 -1280 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10559,7 +10559,7 @@ entity
 {
 	"id" "1054"
 	"classname" "light"
-	"origin" "-144 -512 440"
+	"origin" "-144 -896 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10571,7 +10571,7 @@ entity
 {
 	"id" "1055"
 	"classname" "light"
-	"origin" "-144 -128 440"
+	"origin" "-144 -512 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10583,7 +10583,7 @@ entity
 {
 	"id" "1056"
 	"classname" "light"
-	"origin" "-144 256 440"
+	"origin" "-144 -128 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10595,7 +10595,7 @@ entity
 {
 	"id" "1057"
 	"classname" "light"
-	"origin" "-144 640 440"
+	"origin" "-144 256 440"
 	"_light" "236 214 196 60"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10606,6 +10606,18 @@ entity
 entity
 {
 	"id" "1058"
+	"classname" "light"
+	"origin" "-144 640 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1059"
 	"classname" "env_fog_controller"
 	"origin" "1664 -512 1400"
 	"fogenable" "1"
@@ -10620,7 +10632,7 @@ entity
 }
 entity
 {
-	"id" "1059"
+	"id" "1060"
 	"classname" "shadow_control"
 	"origin" "1664 -512 1300"
 	"angles" "62 0 0"
@@ -10629,14 +10641,14 @@ entity
 }
 entity
 {
-	"id" "1060"
+	"id" "1061"
 	"classname" "env_tonemap_controller"
 	"origin" "1664 -512 1200"
 	"targetname" "tonemap"
 }
 entity
 {
-	"id" "1061"
+	"id" "1062"
 	"classname" "logic_auto"
 	"origin" "1664 -512 1100"
 	"spawnflags" "0"

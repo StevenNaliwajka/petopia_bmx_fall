@@ -63,7 +63,12 @@ run vbsp.exe -game "$GAME" "$MAP.vmf"
 if grep -q -i 'leaked' "$LOG"; then echo "vbsp: MAP LEAKED, stopping" >&2; exit 1; fi
 [ -f "$WORK/$NAME.bsp" ] || { echo "vbsp wrote no bsp" >&2; exit 1; }
 run vvis.exe -game "$GAME" "$MAP"
-run vrad.exe -game "$GAME" -both -threads 2 $FINAL "$MAP"
+# vrad's exit status is not to be trusted under wine: a failed lighting pass has
+# left vbsp's unlit BSP in place and "succeeded". The BSP must carry light.
+if ! run vrad.exe -game "$GAME" -both -threads 2 $FINAL "$MAP"; then
+  echo "vrad failed, stopping (no unlit map shipped)" >&2; exit 1
+fi
+python3 "$ROOT/tools/check-bsp-lit.py" "$WORK/$NAME.bsp" || { echo "vrad left the map unlit, stopping" >&2; exit 1; }
 
 mkdir -p "$ROOT/maps"
 cp "$WORK/$NAME.bsp" "$ROOT/maps/$NAME.bsp"

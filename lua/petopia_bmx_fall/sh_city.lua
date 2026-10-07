@@ -1397,15 +1397,17 @@ function B:lightAt(x, y, fl)
     local sh = self:wallShadow(x, y, fl)
     local r, g, b = a[1] * sh, a[2] * sh, a[3] * sh
     local pool, warm = fl.lampRadius or 420, fl.lampColor or { 0.62, 0.42, 0.2 }
+    -- where two lamps' pools overlap they brighten each other, but never past
+    -- one lamp at full: 1 - (1-k1)(1-k2)..., so two close lamps (the signs
+    -- push them along the beds) cannot clip the paving white
+    local dark = 1
     for _, l in ipairs(self.lamps) do
         local dx, dy = x - l.head[1], y - l.head[2]
         local d2 = (dx * dx + dy * dy) / (pool * pool)
-        if d2 < 1 then
-            local k = (1 - d2) * (1 - d2)
-            r, g, b = r + warm[1] * k, g + warm[2] * k, b + warm[3] * k
-        end
+        if d2 < 1 then dark = dark * (1 - (1 - d2) * (1 - d2)) end
     end
-    return r, g, b
+    local k = 1 - dark
+    return r + warm[1] * k, g + warm[2] * k, b + warm[3] * k
 end
 
 -- A floor quad, x0..x1 by y0..y1 at z, lit per vertex. Texture by world
