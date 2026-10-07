@@ -1505,17 +1505,7 @@ local function shopSign(s, pw, ph)
     local serif = City.SHOP_SERIF[s.kind]
     local family = serif and "BMXCityShopSerif" or "BMXCityShop"
     local text = s.text or ""
-    local textX = 0
-    if s.kind == "metro" then
-        -- the line's roundel each side of the name
-        makeMetroFonts()
-        local l = City.SignLine(City._layout, { metro = s.station })
-        local c = col(l and l.color, { 220, 40, 40 })
-        for _, sx in ipairs({ -pw / 2 + fasc * 0.6, pw / 2 - fasc * 0.6 }) do
-            roundel(sx, top + fasc / 2, fasc * 0.36, c, l and l.label or "M", "BMXCityMetro34")
-        end
-    end
-    draw.SimpleText(text, fit(family, SHOP_SIZES, text, pw - (s.kind == "metro" and fasc * 1.6 or 24)), textX, top + fasc / 2 - 2,
+    draw.SimpleText(text, fit(family, SHOP_SIZES, text, pw - 24), 0, top + fasc / 2 - 2,
         Color(fg[1], fg[2], fg[3]), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
     -- the front under it: stall riser, windows, door
@@ -1526,22 +1516,6 @@ local function shopSign(s, pw, ph)
     doorX = doorX * (pw - 2 * doorW)
     local inner = { -pw / 2 + 6, by + 6, pw - 12, bottom - riser - by - 6 }
     rect({ 70, 66, 62 }, -pw / 2 + 4, bottom - riser, pw - 8, riser - 4)
-    if s.kind == "metro" then
-        -- the way in: a wide opening, stairs going up into the dark
-        local ow = math.min(pw - 40, 420 * px / 1.25)
-        local ox = -ow / 2
-        rect({ 14, 14, 16 }, ox, by + 10, ow, bottom - by - 10)
-        local steps = 9
-        for k = 0, steps - 1 do
-            local f = k / steps
-            local sy = bottom - (bottom - by - 20) * (1 - (1 - f) * (1 - f))
-            rect({ 60 + 70 * (1 - f), 60 + 70 * (1 - f), 64 + 70 * (1 - f) }, ox + 6 + f * ow * 0.18, sy - 3, ow - 12 - f * ow * 0.36, 4)
-        end
-        bar({ 180, 180, 186 }, ox + 10, bottom - 8, ox + ow * 0.2, by + 30, 4)
-        bar({ 180, 180, 186 }, ox + ow - 10, bottom - 8, ox + ow * 0.8, by + 30, 4)
-        if s.sub then draw.SimpleText(s.sub, "BMXCityShopSmall", 0, by + 22, Color(220, 220, 220), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER) end
-        return
-    end
     -- the windows either side of the door
     local doorL, doorR = doorX - doorW / 2, doorX + doorW / 2
     local wins = {}

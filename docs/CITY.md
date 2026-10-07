@@ -94,8 +94,7 @@ and `mood` tables).
   other building is where it always was.
 - **Station signs hang from their line**: across the street under the
   viaduct, on two rods from its girders, over the station house's roof,
-  facing the park. The station house's street floor is the metro's entrance
-  ("QUAHOG METRO", the line's roundels, stairs going up).
+  facing the park. The station house's street floor is plain wall.
 - **Ads are billboards, up high.** A wall ad goes to the top of its
   building's facade, under the cornice, on a steel catwalk with a railing and
   its floodlights over it; one to a facade. A building too low to carry it
@@ -107,11 +106,13 @@ and `mood` tables).
   shop's name, a display window with what it sells (`cl_city.lua`
   SHOP_WINDOWS), a stall riser and a door with its number and an OPEN card,
   between stone pilasters and under a string course. The facade behind is
-  plain (no window behind a shop window). Where nothing stands in front, a
-  striped awning hangs under the fascia; none where a ramp stands against
-  the wall (`noAwning`). Every door behind a planting bed has a gap in the
-  hedge and a brick path across the bed, and is put where no tree, lamp or
-  bush stands in front of it.
+  plain (no window behind a shop window). Only where nothing of the park's
+  stands in front: wherever a ramp is within 200 of the wall (the map's
+  measured `ramps`, kept 40 clear either side) the wall stays plain, and so
+  does a station house's, under its line. A striped awning hangs under the
+  fascia where no tree or lamp stands in front. Every door behind a planting
+  bed has a gap in the hedge and a brick path across the bed, and is put
+  where no tree, lamp or bush stands in front of it.
 - **Lamps**: the street lamps stand at the kerb of the beds, the glow in the
   lamp head's lens (z 438 over the foot, 87 out along the arm, read off
   `lamppost03a_on`'s vertices; it used to hang a foot under the head).
@@ -157,8 +158,8 @@ Everything is in the map's table in `sh_city_maps.lua`:
   crossings; `stationDepth` is how deep the station houses are.
 - `signs`: text panels on the facades (ads become billboards, see above).
 - `billboards`: rooftop billboards.
-- `storefronts`: the shops along the street floor, in order round the park,
-  the metro entrance, and where no awning may go.
+- `ramps`: every ramp's measured footprint; no shop front goes behind one.
+- `storefronts`: the shops along the street floor, in order round the park.
 
 Styles (which panels go on the street floor, the floors above and the
 cornice) and materials are at the top of `sh_city.lua`.

@@ -14,7 +14,8 @@
         street floor is shops: false shop fronts with a fascia and a name, a
         window with what they sell, a door (with a way through the hedge to
         it), pilasters, a string course and, where nothing is in the way, an
-        awning
+        awning -- but only where no ramp stands in front of the wall; there,
+        and under the subway lines' station houses, it is plain wall
       - the street lamps' glow hung a foot under the lamp heads
 ----------------------------------------------------------------------------]]
 
@@ -334,34 +335,157 @@ local function fronts(City, L)
     return out
 end
 
-T.test("sense: the street floor is shops, wall to wall: every frontage building has shop fronts across it", function()
+-- the stretches of a front no ramp stands in front of (a ramp within
+-- SHOP.rampReach of the wall, kept SHOP.rampClear off either side)
+local function freeSpans(City, f)
+    local S = City.SHOP
+    local p = City.Maps.gm_skatepark.park
+    local cuts = {}
+    for _, r in ipairs(RAMPS) do
+        local near
+        if f.side == "north" then near = p[5] - r[5] elseif f.side == "south" then near = r[3] - p[2]
+        elseif f.side == "west" then near = r[2] - p[1] else near = p[4] - r[4] end
+        local a0, a1 = f.ax == 1 and r[2] or r[3], f.ax == 1 and r[4] or r[5]
+        if near < S.rampReach then cuts[#cuts + 1] = { a0 - S.rampClear, a1 + S.rampClear } end
+    end
+    local segs = { { f.a0, f.a1 } }
+    for _, c in ipairs(cuts) do
+        local keep = {}
+        for _, sg in ipairs(segs) do
+            if sg[1] < c[2] and sg[2] > c[1] then
+                if c[1] > sg[1] then keep[#keep + 1] = { sg[1], c[1] } end
+                if c[2] < sg[2] then keep[#keep + 1] = { c[2], sg[2] } end
+            else keep[#keep + 1] = sg end
+        end
+        segs = keep
+    end
+    table.sort(segs, function(a, b) return a[1] < b[1] end)
+    return segs
+end
+
+T.test("sense: the map's ramp list is the measured one the shops keep clear of", function()
+    local City = city()
+    local def = City.Maps.gm_skatepark
+    T.eq(#def.ramps, #RAMPS, "every ramp")
+    for i, r in ipairs(RAMPS) do
+        for k = 1, 7 do T.eq(def.ramps[i][k], r[k], r[1] .. " field " .. k) end
+    end
+end)
+
+T.test("sense: shops along every stretch of wall nothing stands in front of; plain wall where a ramp does", function()
     local City, L = city()
     local S = City.SHOP
     local fs = fronts(City, L)
     T.ok(#fs >= 16, "frontage fronts: " .. #fs)
+    local shops = 0
     for _, f in ipairs(fs) do
         local spans = {}
         for _, s in ipairs(L.signs) do
             if s.shop and s.shopOf == f.bd then
-                spans[#spans + 1] = { s.a0, s.a1 }
+                spans[#spans + 1] = { s.a0, s.a1, s.text }
+                shops = shops + 1
                 T.near(s.face[3] - s.fh / 2, City.Maps.gm_skatepark.ground, 0.01, tostring(s.text) .. " stands on the ground")
                 T.near(s.fh, S.h, 0.01, tostring(s.text) .. " the street floor's height")
             end
         end
-        T.ok(#spans >= 1, f.side .. " building at " .. f.a0 .. " has a shop front")
         table.sort(spans, function(a, b) return a[1] < b[1] end)
-        if f.bd.station then
-            T.eq(#spans, 1, "a station house has one front: the metro's entrance")
-        else
-            -- shop, pilaster, shop...: no gap wider than a pilaster
-            local at = f.a0
-            for _, sp in ipairs(spans) do
-                T.ok(sp[1] - at <= S.pilaster + 0.01, f.side .. " no bare stretch before the shop at " .. sp[1])
-                at = sp[2]
+        local free = f.bd.station and {} or freeSpans(City, f)
+        -- every shop inside a free stretch, with its pilasters
+        for _, sp in ipairs(spans) do
+            local inside = false
+            for _, fr in ipairs(free) do
+                if sp[1] >= fr[1] + S.pilaster - 0.01 and sp[2] <= fr[2] - S.pilaster + 0.01 then inside = true end
             end
-            T.ok(f.a1 - at <= S.pilaster + 0.01, f.side .. " no bare stretch after the last shop, at " .. at)
+            T.ok(inside, sp[3] .. " (" .. math.floor(sp[1]) .. ".." .. math.floor(sp[2]) .. ") stands where no ramp is in front of it")
+        end
+        -- and every free stretch wide enough for a shop is shops end to end
+        for _, fr in ipairs(free) do
+            if fr[2] - fr[1] >= S.minW + 2 * S.pilaster then
+                local at = fr[1]
+                for _, sp in ipairs(spans) do
+                    if sp[1] >= fr[1] and sp[2] <= fr[2] then
+                        T.ok(sp[1] - at <= S.pilaster + 0.01, f.side .. " no bare stretch before the shop at " .. sp[1])
+                        at = sp[2]
+                    end
+                end
+                T.ok(fr[2] - at <= S.pilaster + 0.01, f.side .. " shops all along " .. math.floor(fr[1]) .. ".." .. math.floor(fr[2]))
+            end
         end
     end
+    T.ok(shops >= 8, "shops: " .. shops)
+end)
+
+T.test("sense: no shop front behind a ramp: each one clear of every ramp by 40, and none on a station house", function()
+    local City, L = city()
+    local p = City.Maps.gm_skatepark.park
+    for _, s in ipairs(L.signs) do
+        if s.shop then
+            T.ok(not s.shopOf.station, s.text .. " is not under a subway line")
+            -- the shop front and what stands out from it (pilasters, awning),
+            -- out into the park as far as a ramp could hide it
+            local ax = (s.side == "north" or s.side == "south") and 1 or 2
+            local box
+            if s.side == "north" then box = { s.a0 - 16, p[5] - 200, 0, s.a1 + 16, p[5], 300 }
+            elseif s.side == "south" then box = { s.a0 - 16, p[2], 0, s.a1 + 16, p[2] + 200, 300 }
+            elseif s.side == "west" then box = { p[1], s.a0 - 16, 0, p[1] + 200, s.a1 + 16, 300 }
+            else box = { p[4] - 200, s.a0 - 16, 0, p[4], s.a1 + 16, 300 } end
+            for _, r in ipairs(RAMPS) do
+                T.ok(not overlap(box, { r[2], r[3], r[6], r[4], r[5], r[7] }, City.SHOP.rampClear - 16 - 0.01),
+                    s.text .. " clear of the " .. r[1] .. " at " .. r[2] .. "," .. r[3])
+            end
+        end
+    end
+end)
+
+T.test("sense: the ramp check has teeth (without the ramp list, shops stand behind ramps)", function()
+    local City = city()
+    local def = City.Maps.gm_skatepark
+    local keep = def.ramps
+    def.ramps = {}
+    local ok, L = pcall(City.Build, def)
+    def.ramps = keep
+    T.ok(ok, "built without the ramp list")
+    local p, behind = def.park, 0
+    for _, s in ipairs(L.signs) do
+        if s.shop then
+            for _, r in ipairs(RAMPS) do
+                local ax = (s.side == "north" or s.side == "south") and 1 or 2
+                local a0, a1 = ax == 1 and r[2] or r[3], ax == 1 and r[4] or r[5]
+                local near = s.side == "north" and p[5] - r[5] or s.side == "south" and r[3] - p[2]
+                    or s.side == "west" and r[2] - p[1] or p[4] - r[4]
+                if near < 200 and s.a0 < a1 and s.a1 > a0 then behind = behind + 1 end
+            end
+        end
+    end
+    T.ok(behind >= 5, "shops behind ramps without the list: " .. behind)
+end)
+
+T.test("sense: a station house's street floor is plain wall: no shop, no metro entrance, no window", function()
+    local City, L = city()
+    local wins = windowMats(City)
+    local top = City.Maps.gm_skatepark.ground + City.SHOP.h + City.SHOP.band
+    local n = 0
+    for _, f in ipairs(fronts(City, L)) do
+        if f.bd.station then
+            n = n + 1
+            for _, s in ipairs(L.signs) do
+                T.ok(not (s.shop and s.shopOf == f.bd), f.bd.station .. " station house has no shop front")
+                T.ok(s.kind ~= "metro", "no metro entrance anywhere")
+            end
+            for mat in pairs(wins) do
+                for _, q in ipairs(L.faces[mat] or {}) do
+                    local pax = f.ax == 1 and 2 or 1
+                    local lo = math.min(q[f.ax], q[f.ax + 3], q[f.ax + 6])
+                    local hi = math.max(q[f.ax], q[f.ax + 3], q[f.ax + 6])
+                    if math.abs(q[pax] - f.plane) < 1 and math.abs(q[pax + 6] - f.plane) < 1 and math.min(q[3], q[9]) < top - 0.5
+                       and lo < f.a1 - 0.5 and hi > f.a0 + 0.5 then
+                        T.ok(false, f.bd.station .. " station house has a " .. mat .. " at street level")
+                    end
+                end
+            end
+        end
+    end
+    T.eq(n, 6, "station houses looked at")
 end)
 
 T.test("sense: not windows all the way down: no window on a frontage's street floor, facing the park", function()
@@ -411,12 +535,10 @@ T.test("sense: every shop has a name, something in its window, and a door; neigh
         if s.shop then
             shops = shops + 1
             T.ok(s.text and #s.text >= 3, "shop has a name: " .. tostring(s.text))
-            T.ok(City.ShopWindows[s.kind] or s.kind == "metro", tostring(s.text) .. " sells something: " .. tostring(s.kind))
+            T.ok(City.ShopWindows[s.kind], tostring(s.text) .. " sells something: " .. tostring(s.kind))
             T.ok(s.doorAt and s.doorAt > 0.05 and s.doorAt < 0.95, tostring(s.text) .. " has a door")
             T.ok(s.num and s.num ~= "", tostring(s.text) .. " has a number")
-            if s.station then
-                T.eq(s.kind, "metro", "a station house's front is the metro entrance")
-            elseif last[s.side] then
+            if last[s.side] then
                 T.ok(last[s.side] ~= s.text, s.text .. " is not its neighbour's twin")
             end
             last[s.side] = s.text
@@ -425,10 +547,7 @@ T.test("sense: every shop has a name, something in its window, and a door; neigh
             T.near(math.abs(s.face[nax] - s.wall), City.SHOP.case, 0.01, tostring(s.text) .. " stands just proud of its wall")
         end
     end
-    T.ok(shops >= 20, "shops: " .. shops)
-    local metro = 0
-    for _, s in ipairs(L.signs) do if s.shop and s.kind == "metro" then metro = metro + 1 end end
-    T.eq(metro, 6, "a metro entrance in each station house")
+    T.ok(shops >= 8, "shops: " .. shops)
 end)
 
 T.test("sense: every shop door can be got to: a gap in the hedge, a path across the bed, no tree or lamp in the doorway", function()
@@ -439,7 +558,7 @@ T.test("sense: every shop door can be got to: a gap in the hedge, a path across 
     for _, k in ipairs(City.LEAF_COLOURS) do leaves[k] = true end
     local behindBed = 0
     for _, s in ipairs(L.signs) do
-        if s.shop and not s.station then
+        if s.shop then
             local bed
             for _, b in ipairs(def.greenery.beds) do
                 if b.side == s.side and s.doorA > b.from + 40 and s.doorA < b.to - 40 then bed = b end
@@ -480,12 +599,12 @@ T.test("sense: every shop door can be got to: a gap in the hedge, a path across 
             end
         end
     end
-    T.ok(behindBed >= 8, "shops behind a planting bed: " .. behindBed)
+    T.ok(behindBed >= 5, "shops behind a planting bed: " .. behindBed)
 end)
 
 T.test("sense: awnings over shop windows: clear of every ramp, tree and lamp", function()
     local City, L = city()
-    T.ok(#L.awnings >= 3, "awnings: " .. #L.awnings)
+    T.ok(#L.awnings >= 6, "awnings: " .. #L.awnings)
     for _, aw in ipairs(L.awnings) do
         local b = aw.box
         for _, r in ipairs(RAMPS) do
@@ -524,10 +643,10 @@ T.test("sense (client): every shop front paints its name, without an error", fun
             T.ok(ok, tostring(s.text) .. " paints: " .. tostring(err))
             local all = table.concat(texts, "|")
             T.ok(all:find(s.text, 1, true), tostring(s.text) .. " shows its name: " .. all)
-            if not s.station then T.ok(all:find("OPEN", 1, true), tostring(s.text) .. " has its OPEN card") end
+            T.ok(all:find("OPEN", 1, true), tostring(s.text) .. " has its OPEN card")
         end
     end
-    T.ok(n >= 20, "shop fronts painted: " .. n)
+    T.ok(n >= 8, "shop fronts painted: " .. n)
     -- every kind of shop the map has has a window painter
     for _, shop in ipairs(City.Maps.gm_skatepark.storefronts.shops) do
         T.ok(City.ShopWindows[shop.kind], shop.text .. ": a window for " .. shop.kind)

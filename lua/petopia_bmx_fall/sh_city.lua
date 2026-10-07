@@ -1110,7 +1110,7 @@ end
 -- painted with the shop's fascia and name, its display window and its door
 -- (cl_city.lua, the "shop" look) -- between stone pilasters, under a string
 -- course, with a striped awning where nothing stands in front of it. The
--- station house's front is the metro's entrance.
+-- station house, under the line, and the wall behind a ramp stay plain.
 --
 -- The facade behind them (the street floor and the one over it) is laid as
 -- blank wall, like the wall behind any sign, so there is no window behind
@@ -1125,9 +1125,51 @@ City.SHOP = {
     band = 12,        -- the string course over the shop fronts
     maxW = 560,       -- a building wider than this has several shops
     minW = 192,       -- narrower than this, no shop at all
-    stationW = 800,   -- the metro entrance at most (its artwork's width)
     door = 48,        -- a door's width, for the hedges and trees to keep clear of
+    rampReach = 200,  -- a ramp this near the wall stands in front of its shops
+    rampClear = 40,   -- and keeps them this far off, either side
 }
+
+-- The stretches of wall `side` (a0, a1 along it) that a ramp stands in front
+-- of: no shop front goes there, since nobody could see or reach it past the
+-- ramp; the wall behind the ramp stays plain. From the map's measured ramp
+-- footprints (`ramps`).
+function B:rampSpans(side)
+    local S = City.SHOP
+    local out = {}
+    for _, r in ipairs(self.def.ramps or {}) do
+        local x0, y0, x1, y1 = r[2], r[3], r[4], r[5]
+        local near, a0, a1
+        if side.axis == "x" then
+            near = side.out > 0 and side.at - y1 or y0 - side.at
+            a0, a1 = x0, x1
+        else
+            near = side.out > 0 and side.at - x1 or x0 - side.at
+            a0, a1 = y0, y1
+        end
+        if near < S.rampReach then out[#out + 1] = { a0 - S.rampClear, a1 + S.rampClear, r[1] } end
+    end
+    return out
+end
+
+-- [a0, a1] less every span in `cuts`: the free stretches, in order.
+local function freeOf(a0, a1, cuts)
+    local segs = { { a0, a1 } }
+    for _, c in ipairs(cuts) do
+        local keep = {}
+        for _, sg in ipairs(segs) do
+            if sg[1] < c[2] and sg[2] > c[1] then
+                if c[1] > sg[1] then keep[#keep + 1] = { sg[1], c[1] } end
+                if c[2] < sg[2] then keep[#keep + 1] = { c[2], sg[2] } end
+            else
+                keep[#keep + 1] = sg
+            end
+        end
+        segs = keep
+    end
+    table.sort(segs, function(x, y) return x[1] < y[1] end)
+    return segs
+end
 
 function B:storefronts(side, built)
     local sf = self.def.storefronts
@@ -1147,6 +1189,7 @@ function B:storefronts(side, built)
     self.blanks = self.blanks or {}
     self.shopIndex = self.shopIndex or 0
     local list = sf.shops or {}
+    local ramps = self:rampSpans(side)
     for _, bd in ipairs(built) do
         local a0, a1 = math.max(bd[ax], w0), math.min(bd[ax + 3], w1)
         if bd.street and a1 - a0 >= S.minW then
@@ -1154,53 +1197,55 @@ function B:storefronts(side, built)
             local wall = (side.out > 0) and bd[lo_i] or bd[lo_i + 3]
             local face = wall + nn * S.case
             local P = S.pilaster
-            local count = bd.station and 1 or math.max(1, math.ceil((a1 - a0 - P) / (S.maxW + P)))
-            local w = (a1 - a0 - P * (count + 1)) / count
-            local first = a0 + P
-            if bd.station and w > S.stationW then
-                first = (a0 + a1) / 2 - S.stationW / 2
-                w = S.stationW
-            end
             local was = self.group
             self.group = "front:" .. side.name
-            for k = 1, count do
-                local s0 = first + (k - 1) * (w + P)
-                local c = s0 + w / 2
-                local shop
-                if bd.station then
-                    shop = sf.station or { text = "METRO", kind = "metro" }
-                else
-                    self.shopIndex = self.shopIndex + 1
-                    shop = list[(self.shopIndex - 1) % math.max(#list, 1) + 1] or { text = "SHOP", kind = "general" }
-                end
-                -- the door: left, middle or right of the front, by turns
-                local doorAt = bd.station and 0.5 or ({ 0.18, 0.5, 0.82 })[self.shopIndex % 3 + 1]
-                local doorA = c + ra * (doorAt - 0.5) * (w - 2 * S.door)
-                local sg = {}
-                for key, v in pairs(shop) do sg[key] = v end
-                sg.look, sg.shop = "shop", true
-                sg.station = bd.station
-                sg.num = tostring(math.floor(math.abs(c) / 16) * 2 + 1)
-                sg.doorAt, sg.doorA = doorAt, doorA
-                local pos = { 0, 0, ground + S.h / 2 }
-                pos[ax] = c
-                pos[lo_i] = face
-                sg.pos, sg.normal, sg.wall, sg.shopOf = pos, n, wall, bd
-                sg.w, sg.h = w, S.h
-                sg.side, sg.a0, sg.a1 = side.name, s0, s0 + w
-                sg.caseMat = style.plain
-                self.shops[#self.shops + 1] = sg
-                self.shopKeep[#self.shopKeep + 1] = { side = side.name, a0 = s0 - P, a1 = s0 + w + P,
-                                                      z0 = ground, z1 = ground + S.h + S.band }
-                -- the pilaster on its left (and, after the last, its right)
-                for _, pa in ipairs(k == count and { s0 - P, s0 + w } or { s0 - P }) do
-                    self:wallBox(side, pa, pa + P, -inset - S.proud, -inset, ground, ground + S.h,
-                        { side = style.plain, top = style.plain }, 0.92)
+            -- the shops go on the stretches no ramp stands in front of; a
+            -- station house, under the line, keeps a plain wall
+            local free = bd.station and {} or freeOf(a0, a1, ramps)
+            local any = false
+            for _, seg in ipairs(free) do
+                local f0, f1 = seg[1], seg[2]
+                if f1 - f0 >= S.minW + 2 * P then
+                    any = true
+                    local count = math.max(1, math.ceil((f1 - f0 - P) / (S.maxW + P)))
+                    local w = (f1 - f0 - P * (count + 1)) / count
+                    for k = 1, count do
+                        local s0 = f0 + P + (k - 1) * (w + P)
+                        local c = s0 + w / 2
+                        self.shopIndex = self.shopIndex + 1
+                        local shop = list[(self.shopIndex - 1) % math.max(#list, 1) + 1] or { text = "SHOP", kind = "general" }
+                        -- the door: left, middle or right of the front, by turns
+                        local doorAt = ({ 0.18, 0.5, 0.82 })[self.shopIndex % 3 + 1]
+                        local doorA = c + ra * (doorAt - 0.5) * (w - 2 * S.door)
+                        local sg = {}
+                        for key, v in pairs(shop) do sg[key] = v end
+                        sg.look, sg.shop = "shop", true
+                        sg.num = tostring(math.floor(math.abs(c) / 16) * 2 + 1)
+                        sg.doorAt, sg.doorA = doorAt, doorA
+                        local pos = { 0, 0, ground + S.h / 2 }
+                        pos[ax] = c
+                        pos[lo_i] = face
+                        sg.pos, sg.normal, sg.wall, sg.shopOf = pos, n, wall, bd
+                        sg.w, sg.h = w, S.h
+                        sg.side, sg.a0, sg.a1 = side.name, s0, s0 + w
+                        sg.caseMat = style.plain
+                        self.shops[#self.shops + 1] = sg
+                        self.shopKeep[#self.shopKeep + 1] = { side = side.name, a0 = s0 - P, a1 = s0 + w + P,
+                                                              z0 = ground, z1 = ground + S.h + S.band }
+                        -- the pilaster on its left (and, after the last, its right)
+                        for _, pa in ipairs(k == count and { s0 - P, s0 + w } or { s0 - P }) do
+                            self:wallBox(side, pa, pa + P, -inset - S.proud, -inset, ground, ground + S.h,
+                                { side = style.plain, top = style.plain }, 0.92)
+                        end
+                    end
                 end
             end
-            -- the string course over them all, and the wall behind blank
-            self:wallBox(side, a0, a1, -inset - S.proud - 2, -inset, ground + S.h, ground + S.h + S.band,
-                { side = style.trim, top = style.plain, bottom = style.plain }, 0.9)
+            -- the string course over the shops, and the wall behind them (or
+            -- where no shop could go) blank
+            if any then
+                self:wallBox(side, a0, a1, -inset - S.proud - 2, -inset, ground + S.h, ground + S.h + S.band,
+                    { side = style.trim, top = style.plain, bottom = style.plain }, 0.9)
+            end
             -- (all of its front: the part round the corner, past the park's
             -- wall, is out of sight, and plain)
             self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = bd[ax], a1 = bd[ax + 3], z0 = ground, z1 = ground + S.h + S.band }
@@ -1217,7 +1262,7 @@ end
 -- Awnings over the shop windows: striped canvas sloping out from under the
 -- fascia, with a valance along its front edge. Only where nothing stands in
 -- front: no tree or lamp in front of the shop (they would grow through it),
--- and no ramp against the wall (`noAwning`, measured from the ramps).
+-- and no ramp against the wall (B:rampSpans).
 City.AWNING = { out = 28, drop = 20, valance = 10, stripe = 24 }
 City.AwningColours = {
     red = { 0.62, 0.12, 0.1 }, green = { 0.12, 0.36, 0.2 }, blue = { 0.14, 0.24, 0.46 },
@@ -1236,9 +1281,9 @@ function B:awnings(sf)
     for _, sg in ipairs(self.shops or {}) do
         local Sd = self.sidesByName[sg.side]
         self.group = "front:" .. sg.side
-        local clear = sg.awning ~= nil and not sg.station
-        for _, na in ipairs(sf.noAwning or {}) do
-            if na.side == sg.side and sg.a0 < na.to and sg.a1 > na.from then clear = false end
+        local clear = sg.awning ~= nil
+        for _, rs in ipairs(self:rampSpans(Sd)) do
+            if sg.a0 < rs[2] and sg.a1 > rs[1] then clear = false end
         end
         local d0 = -inset - S.case            -- the face
         local d1 = d0 - A.out                 -- the awning's front edge

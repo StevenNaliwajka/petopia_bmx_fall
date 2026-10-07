@@ -230,28 +230,39 @@ BMX.City.Maps.gm_skatepark = {
           pic = { { model = "models/props_combine/breenbust.mdl", ang = { 0, -22, 0 } } }, picPitch = 6, picBg = { 90, 40, 45 } },
     },
 
-    -- The street floor is shops (sh_city.lua, B:storefronts): every frontage
-    -- building's front, over the park's wall, is false shop fronts, in this
-    -- order round the park (north, south, west, east; each wall west to east
-    -- or south to north), and the station houses are the metro's entrances.
-    -- Quahog's own: the town's shops and the family's, nothing edgier.
-    -- `kind` picks what is in the window (cl_city.lua SHOP_WINDOWS); `awning`
-    -- its colour (City.AwningColours), stripes with `awning2` or cream.
-    --
-    -- No awning where a ramp stands against the wall (each ramp's measured
-    -- footprint, tests/test_city.lua, 40 units of air): a rider going up a
-    -- quarterpipe must not ride through canvas.
+    -- Every ramp in the park: its footprint, read off the running server
+    -- (each one's WorldSpaceAABB, gm_skatepark, 2026-10-07; tests/test_city.lua
+    -- holds the same list as its truth). name, x0, y0, x1, y1, z0, z1.
+    ramps = {
+        { "spiner2", -221, -1785, 155, -1208, 63, 179 },
+        { "flatramp", -161, 481, 193, 767, 63, 177 },
+        { "quarterpipe3", 187, 475, 807, 774, 63, 237 },
+        { "halfpipe7", 324, -1037, 1515, -468, 64, 421 },
+        { "flatramp", 559, -1791, 913, -1505, 63, 177 },
+        { "funbox2", 572, -259, 1118, 222, 64, 150 },
+        { "quarterpipe3", 811, 475, 1431, 774, 64, 237 },
+        { "spiner2", 1386, -1703, 1963, -1327, 63, 179 },
+        { "funbox2", 1855, -290, 2401, 191, 64, 150 },
+        { "flatramp", 2151, -1009, 2437, -655, 63, 177 },
+        { "funbox2", 2398, -1776, 2944, -1295, 64, 150 },
+        { "spiner2", 2437, -1082, 2812, -505, 63, 179 },
+        { "spiner2", 2805, -1082, 3180, -505, 63, 179 },
+        { "rail2", 2914, -342, 3230, -330, 63, 139 },
+        { "flatramp", 2929, -257, 3215, 97, 63, 177 },
+        { "flatramp", 2929, 95, 3215, 449, 63, 177 },
+        { "quarterpipe3", 3291, -1687, 3590, -1067, 64, 237 },
+    },
+
+    -- The street floor is shops (sh_city.lua, B:storefronts): false shop
+    -- fronts on every frontage building, over the park's wall, in this order
+    -- round the park (north, south, west, east; each wall west to east or
+    -- south to north). Only where nothing of the park's stands in front: a
+    -- stretch of wall with a ramp within 200 of it stays plain wall (no
+    -- shop anyone could see or get to), and so does a station house's, under
+    -- its line. Quahog's own: the town's shops and the family's, nothing
+    -- edgier. `kind` picks what is in the window (cl_city.lua SHOP_WINDOWS);
+    -- `awning` its colour (City.AwningColours), stripes with `awning2` or cream.
     storefronts = {
-        station = { text = "QUAHOG METRO", sub = "Trains every few minutes", kind = "metro",
-                    bg = { 36, 38, 42 }, fg = { 255, 255, 255 } },
-        noAwning = {
-            { side = "north", from = -256, to = 1471 },     -- flat ramp, both quarterpipes
-            { side = "south", from = -256, to = 195 },      -- the spine in the corner
-            { side = "south", from = 519, to = 953 },       -- the flat ramp
-            { side = "south", from = 2358, to = 2984 },     -- the funbox
-            { side = "west", from = -1792, to = -1168 },    -- the spine
-            { side = "east", from = -1727, to = -1027 },    -- the quarterpipe
-        },
         shops = {
             { text = "GOLDMAN'S PHARMACY", kind = "pharmacy", bg = { 22, 70, 54 }, fg = { 240, 240, 228 }, awning = "green" },
             { text = "SPOONER ST BIKES", kind = "bikes", bg = { 196, 78, 22 }, fg = { 255, 255, 255 }, awning = "navy" },
