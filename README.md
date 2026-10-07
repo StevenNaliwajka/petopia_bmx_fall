@@ -11,6 +11,7 @@ walls to z 528, sky to z 1720). Every brush is our own; no other map's content.
 | Path | What |
 |---|---|
 | `mapsrc/build_vmf.py` | The map, as code: writes `mapsrc/petopia_bmx_fall.vmf` (deterministic, stdlib only). |
+| `mapsrc/city_lamps.txt` | The city's street lamp heads (from `tools/city/lamps.lua`); each one is a baked light in the BSP. |
 | `tools/build-map.sh` | VMF -> vbsp -> vvis -> vrad (`-both`, 2 threads) under wine -> `maps/petopia_bmx_fall.bsp`. `-final` for final-quality light. |
 | `maps/petopia_bmx_fall.bsp` | The compiled map (base HL2/GMod materials only). |
 | `maps/thumb/petopia_bmx_fall.png` | The map icon (Peter on his BMX against a fall sunset). |
@@ -39,7 +40,10 @@ a folder in `garrysmod/addons/` (it has `maps/` and `lua/`), and start with
     lua5.1 tests/run.lua
 
 The city's tests on the BMX addon's offline harness, which this finds at
-`$BMX_ADDON`, else `../gmod-bmx`, else `tests/.addon`.
+`$BMX_ADDON`, else `../gmod-bmx`, else `tests/.addon`. `tests/test_lighting.lua`
+reads the compiled BSP's lightmaps and fails on any part of the park left dark
+or blown out; `lua5.1 tests/bsplight.lua maps/petopia_bmx_fall.bsp` prints
+that light as a map of the park.
 
 ## Rebuilding
 
@@ -51,4 +55,6 @@ Needs wine, python3 and the map SDK at `~/sdk/gmod-mapsdk` (override with
 SlimBSP's compilers is written at the top of `tools/build-map.sh`.
 
 To change a ramp, edit `RAMPS` in `mapsrc/build_vmf.py` and rebuild; commit the
-VMF and the BSP together.
+VMF and the BSP together. The light (sun, sky fill, the west-wall fill row,
+lamps, exposure) is at the top of the same file. If the city's lamps move, run
+`lua5.1 tools/city/lamps.lua > mapsrc/city_lamps.txt` and rebuild.

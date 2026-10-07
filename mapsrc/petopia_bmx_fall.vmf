@@ -10415,8 +10415,8 @@ entity
 	"origin" "1664 -512 1500"
 	"angles" "0 0 0"
 	"pitch" "-28"
-	"_light" "255 214 160 400"
-	"_ambient" "190 160 130 70"
+	"_light" "255 206 150 200"
+	"_ambient" "200 212 255 175"
 	"_lightHDR" "-1 -1 -1 1"
 	"_ambientHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10426,24 +10426,224 @@ entity
 entity
 {
 	"id" "1043"
+	"classname" "light"
+	"origin" "1743 630 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1044"
+	"classname" "light"
+	"origin" "2549 630 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1045"
+	"classname" "light"
+	"origin" "3481 630 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1046"
+	"classname" "light"
+	"origin" "3120 -1654 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1047"
+	"classname" "light"
+	"origin" "-118 -733 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1048"
+	"classname" "light"
+	"origin" "-118 -360 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1049"
+	"classname" "light"
+	"origin" "3446 -738 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1050"
+	"classname" "light"
+	"origin" "3446 -174 476"
+	"_light" "255 186 112 260"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "260"
+	"_zero_percent_distance" "640"
+}
+entity
+{
+	"id" "1051"
+	"classname" "light"
+	"origin" "-144 -1664 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1052"
+	"classname" "light"
+	"origin" "-144 -1280 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1053"
+	"classname" "light"
+	"origin" "-144 -896 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1054"
+	"classname" "light"
+	"origin" "-144 -512 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1055"
+	"classname" "light"
+	"origin" "-144 -128 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1056"
+	"classname" "light"
+	"origin" "-144 256 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1057"
+	"classname" "light"
+	"origin" "-144 640 440"
+	"_light" "236 214 196 60"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1058"
 	"classname" "env_fog_controller"
 	"origin" "1664 -512 1400"
 	"fogenable" "1"
-	"fogcolor" "214 170 120"
-	"fogcolor2" "214 170 120"
+	"fogcolor" "150 118 92"
+	"fogcolor2" "150 118 92"
 	"fogstart" "3000"
-	"fogend" "14000"
-	"fogmaxdensity" "0.35"
+	"fogend" "15000"
+	"fogmaxdensity" "0.45"
 	"fogdir" "1 0 0"
 	"farz" "-1"
 	"targetname" "fog"
 }
 entity
 {
-	"id" "1044"
+	"id" "1059"
 	"classname" "shadow_control"
 	"origin" "1664 -512 1300"
 	"angles" "62 0 0"
 	"color" "64 52 40"
 	"distance" "96"
+}
+entity
+{
+	"id" "1060"
+	"classname" "env_tonemap_controller"
+	"origin" "1664 -512 1200"
+	"targetname" "tonemap"
+}
+entity
+{
+	"id" "1061"
+	"classname" "logic_auto"
+	"origin" "1664 -512 1100"
+	"spawnflags" "0"
+	connections
+	{
+		"OnMapSpawn" "tonemap,SetAutoExposureMin,0.6,0,-1"
+		"OnMapSpawn" "tonemap,SetAutoExposureMax,1.1,0,-1"
+		"OnMapSpawn" "tonemap,SetBloomScale,0.15,0,-1"
+	}
 }
