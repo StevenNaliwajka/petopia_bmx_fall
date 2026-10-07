@@ -136,7 +136,9 @@ T.test("signs: each wall sign hangs on one building, inside the park, under its 
             T.near(math.abs(facePlane - wallPlane), City.SIGN_CASE, 0.01, tostring(s.text or s.metro) .. " case depth")
         end
     end
-    T.ok(walls >= 10, "wall signs placed: " .. walls)
+    -- the billboards on facades and the street signs (station signs hang from
+    -- their lines, shop fronts stand on the street floor: tested apart)
+    T.ok(walls >= 6, "wall signs placed: " .. walls)
 end)
 
 T.test("signs: the face is the open front of a case, nothing lies in its plane (no z-fighting)", function()
@@ -299,9 +301,12 @@ T.test("signs: tools/city/export.lua writes every sign (station signs have no te
     T.eq(n, #L.signs, "every sign exported")
 end)
 
--- Everything of a line a sign must keep clear of, as boxes { name, {x0,y0,z0,x1,y1,z1} }:
--- its colliders, the whole viaduct (deck, girders, rails, truss, bracing), each
--- portal with its frame, and the volume every train model sweeps along it.
+-- Everything of a line a station sign must keep clear of, as boxes
+-- { name, {x0,y0,z0,x1,y1,z1} }: the deck and everything on it (rails, truss,
+-- bracing: from the deck's underside up), and the volume every train model
+-- sweeps along its track, out to the ends of the line. A station sign HANGS
+-- from the girders under the deck, so the girders themselves are its
+-- mounting, not something to keep clear of.
 local function lineParts(City, L)
     local V = City.Viaduct
     local parts = {}
@@ -309,36 +314,24 @@ local function lineParts(City, L)
         if l.axis == "y" then return { l.at + c0, a0, z0, l.at + c1, a1, z1 } end
         return { a0, l.at + c0, z0, a1, l.at + c1, z1 }
     end
-    for _, so in ipairs(L.solids) do
-        if so.name:find("^line") then
-            for _, b in ipairs(so.boxes) do parts[#parts + 1] = { so.name .. " collider", b } end
-        end
-    end
     for _, l in ipairs(L.lines) do
         local hw = V.width / 2
-        parts[#parts + 1] = { l.name .. " viaduct", lineBox(l, l.from, l.to, -hw, hw, l.deck - V.slab - V.girder, l.deck + V.truss + 16) }
+        parts[#parts + 1] = { l.name .. " deck and truss", lineBox(l, l.from - l.extent, l.to + l.extent, -hw, hw,
+            l.deck - V.slab, l.deck + V.truss + 16) }
         for _, M in ipairs(City.TrainModels or { { w = 136, h = 205, len = 650 } }) do
             local w = math.max(M.w, 1) / 2
             local reach = l.runout + l.cars * ((M.len or 650) + 14)
-            parts[#parts + 1] = { l.name .. " train " .. tostring(M.model), lineBox(l, l.from - reach, l.to + reach, -w, w,
-                l.deck + V.rail, l.deck + V.rail + M.h) }
+            for _, dir in ipairs({ 1, -1 }) do
+                local c = City.TrackOffset(l, dir)
+                parts[#parts + 1] = { l.name .. " train " .. tostring(M.model), lineBox(l, l.from - reach, l.to + reach, c - w, c + w,
+                    l.deck + V.rail, l.deck + V.rail + M.h) }
+            end
         end
     end
-    -- each portal: its frame pieces, and the opening they surround
-    local ends = {}
-    for _, p in ipairs(L.portals or {}) do
-        parts[#parts + 1] = { p.line .. " portal frame", p.box }
-        local k = p.line .. ":" .. math.floor((p.box[2] + p.box[5]) / 2 / 400) .. ":" .. math.floor((p.box[1] + p.box[4]) / 2 / 400)
-        local u = ends[k]
-        if not u then ends[k] = { p.box[1], p.box[2], p.box[3], p.box[4], p.box[5], p.box[6] }
-        else for a = 1, 3 do u[a] = math.min(u[a], p.box[a]) u[a + 3] = math.max(u[a + 3], p.box[a + 3]) end end
-    end
-    for k, u in pairs(ends) do parts[#parts + 1] = { k .. " portal", u } end
     return parts
 end
 
--- a station sign's whole volume: its case (face to wall) and, for a hung
--- sign, its hangers
+-- a station sign's whole volume: its case and its hangers
 local function signBox(s)
     local b = s.case
     return { b[1], b[2], b[3], b[4], b[5], math.max(b[6], s.hang or b[6]) }
@@ -365,30 +358,42 @@ local function trackClashes(City, L)
     return out, parts
 end
 
-T.test("station signs: clear of the tracks, viaduct, portals and every train's path, by a margin", function()
+T.test("station signs: clear of the deck, the tracks and every train's path, by a margin", function()
     local City, L = city()
     local hits, parts = trackClashes(City, L)
-    T.ok(#parts > 20, "parts to keep clear of: " .. #parts)
-    T.ok(#L.portals >= 24, "every portal's frame is in the layout: " .. #L.portals)
+    T.ok(#parts >= 9, "parts to keep clear of: " .. #parts)
     local n = 0
     for _, s in ipairs(L.signs) do if s.look == "transit" or s.metro then n = n + 1 end end
     T.ok(n >= 6, "station signs: " .. n)
     T.eq(#hits, 0, "signs clashing with a line: " .. table.concat(hits, "; "))
 end)
 
-T.test("station signs: each still reads as its line's, by its own portal", function()
+T.test("station signs: hung from their own line's girders, over its station house, where the line crosses the wall", function()
     local City, L = city()
+    local V = City.Viaduct
     for _, s in ipairs(L.signs) do
         if s.metro then
             local l
             for _, x in ipairs(L.lines) do if x.name == s.metro then l = x end end
             T.ok(l, s.metro .. " is a line")
-            -- on the end wall the line runs into, near its portal
+            local gb = l.deck - V.slab - V.girder
+            T.near(s.hang, gb, 0.01, s.metro .. " hangs from the girders' underside")
+            local top = s.face[3] + s.fh / 2
+            T.ok(top < gb and top > gb - 64, s.metro .. " just under the girders")
+            -- its rods land on the girders, not in the air beside the deck
+            T.ok(s.fw * s.rods <= V.width / 2 - 4, s.metro .. " rods under the deck")
             local along = l.axis == "y" and s.face[2] or s.face[1]
             local across = l.axis == "y" and s.face[1] or s.face[2]
-            T.ok(math.abs(along - l.from) < 40 or math.abs(along - l.to) < 40, s.metro .. " on an end wall")
-            local dz = s.face[3] - l.deck
-            T.ok(math.abs(across - l.at) + math.max(0, math.abs(dz) - 400) <= 700, s.metro .. " sign within sight of its portal")
+            T.ok(math.abs(along - l.from) < 40 or math.abs(along - l.to) < 40, s.metro .. " at a wall the line crosses")
+            T.near(across, l.at, 0.01, s.metro .. " centred under the line")
+            -- over the station house's roof, clear of it
+            local side
+            if l.axis == "y" then side = math.abs(along - l.to) < 40 and "north" or "south"
+            else side = math.abs(along - l.to) < 40 and "east" or "west" end
+            local st
+            for _, bd in ipairs(L.rows[side]) do if bd.station == l.name then st = bd end end
+            T.ok(st, s.metro .. " has a station house on the " .. side .. " wall")
+            if st then T.ok(s.face[3] - s.fh / 2 >= st[6] + 16, s.metro .. " sign over the station's roof (" .. st[6] .. ")") end
         end
     end
 end)

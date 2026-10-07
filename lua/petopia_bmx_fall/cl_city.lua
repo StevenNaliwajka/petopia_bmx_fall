@@ -40,7 +40,7 @@ local cvPlants = CreateClientConVar("bmx_city_plants", "1", true, false, "BMX: d
 -- origin, `w`/`h`/`len` its size at `scale`, so the truss test can check it.
 -- train_outro_car01 ships in the content_hl2 VPKs, which not every client has;
 -- train001 is in hl2_misc, which every GMod has.
-City.TrainCar = { length = 650, gap = 14, lift = 104 }
+-- (City.TrainCar, the slot, is in sh_city.lua: the server needs it too)
 City.TrainModels = {
     { model = "models/props_trainstation/train_outro_car01.mdl", scale = 1, lift = 104.2, w = 136, h = 205, len = 649 },
     { model = "models/props_trainstation/train001.mdl", scale = 0.94, lift = 113.8 * 0.94,
@@ -196,52 +196,77 @@ end
 -- Trains
 --------------------------------------------------------------------------
 
--- Where line `l`'s train is at time t: nil when none is running, else the
--- head's distance along the line from its `from` end, and the direction it is
--- going (+1 from -> to, -1 back). Pure, for the tests.
-function City.TrainAt(l, t)
-    local C = City.TrainCar
+-- Every train on line `l` at time t, oldest first: { head, dir, cycle,
+-- train, run, phase }, `head` the nose's distance along the line from its
+-- `from` wall (negative: still out over the city), `dir` +1 from -> to, -1
+-- back. Train `cycle` sets off every `period` seconds from `runout` out past
+-- the wall, alternating ways, and is gone `run` seconds later, `runout` past
+-- the far wall. A run is longer than a period: the last train is still on
+-- its way out when the next comes in, on the other track. Pure, for tests.
+function City.TrainsAt(l, t)
     local len = l.to - l.from
-    local train = l.cars * C.length + (l.cars - 1) * C.gap
+    local train = City.TrainLength(l.cars)
     local run = (len + 2 * l.runout + train) / l.speed
     local since = t - l.offset
-    local cycle = math.floor(since / l.period)
-    local phase = since - cycle * l.period
-    if phase < 0 or phase > run then return nil end
-    local dir = (cycle % 2 == 0) and 1 or -1
-    local head = -l.runout + phase * l.speed            -- distance travelled
-    return { head = head, dir = dir, cycle = cycle, train = train, run = run, phase = phase }
+    local out = {}
+    for cycle = math.ceil((since - run) / l.period), math.floor(since / l.period) do
+        local phase = since - cycle * l.period
+        if phase >= 0 and phase <= run then
+            out[#out + 1] = { head = -l.runout + phase * l.speed, dir = (cycle % 2 == 0) and 1 or -1,
+                              cycle = cycle, train = train, run = run, phase = phase }
+        end
+    end
+    return out
+end
+
+-- One train: train `cycle`, if it is running at t; else the one nearest the
+-- middle of the park (nil if the line is empty).
+function City.TrainAt(l, t, cycle)
+    local best, bestD
+    local mid = (l.to - l.from) / 2
+    for _, st in ipairs(City.TrainsAt(l, t)) do
+        if cycle then
+            if st.cycle == cycle then return st end
+        else
+            local d = math.abs(st.head - st.train / 2 - mid)
+            if not bestD or d < bestD then best, bestD = st, d end
+        end
+    end
+    return best
 end
 
 -- The world position and yaw of car `i` (1 = lead) of a train at `st`. z is
 -- the model's origin for a model whose floor is `lift` below it (default: the
--- slot's, City.TrainCar.lift).
+-- slot's, City.TrainCar.lift). It runs on its own track (City.TrackOffset).
 function City.CarPos(l, st, i, lift)
     local C = City.TrainCar
     local back = (i - 0.5) * C.length + (i - 1) * C.gap
     local d = st.head - back                             -- distance from the start end
     local a = st.dir > 0 and (l.from + d) or (l.to - d)
     local z = l.deck + City.Viaduct.rail + (lift or C.lift)
+    local c = l.at + City.TrackOffset(l, st.dir)
     -- train_outro_car01 is long along its own y axis (-322..327, measured on
     -- the server): yaw 0 lays it along world y, yaw 90 along world x. It
     -- faces the way it is going.
-    if l.axis == "y" then return l.at, a, z, st.dir > 0 and 0 or 180 end
-    return a, l.at, z, st.dir > 0 and -90 or 90
+    if l.axis == "y" then return c, a, z, st.dir > 0 and 0 or 180 end
+    return a, c, z, st.dir > 0 and -90 or 90
 end
 
--- A point `a` along line `l` (a = world coordinate on its axis) at height z.
-local function linePoint(l, a, z)
-    if l.axis == "y" then return l.at, a, z end
-    return a, l.at, z
+-- A point `a` along line `l` (a = world coordinate on its axis) at height z,
+-- on the track a train going `dir` runs on.
+local function linePoint(l, a, z, dir)
+    local c = l.at + City.TrackOffset(l, dir or 1)
+    if l.axis == "y" then return c, a, z end
+    return a, c, z
 end
 
 -- Where a train at `st` is heard, and how loud: the wheels' rumble rides the
--- train. It comes from the stretch of the train that is out over the park
--- (the middle of it, or the end of it still in the portal while it comes out
--- or goes in), so it slides along with the cars; out of the portals it fades
--- out over `fade` units, so it starts as the train comes out and stops as it
--- goes in. Pure, for the tests: { x, y, z, vol, a }.
-City.TrainFade = 400
+-- train. It comes from the stretch of the train that is over the park (the
+-- middle of it, or its end nearest the park while it comes in or goes out),
+-- so it slides along with the cars; out over the city it fades over `fade`
+-- units, so it swells as the train comes in and dies away as it goes off
+-- into the distance. Pure, for the tests: { x, y, z, vol, a }.
+City.TrainFade = 1500
 function City.TrainSoundAt(l, st)
     if not st then return nil end
     local len = l.to - l.from
@@ -250,20 +275,20 @@ function City.TrainSoundAt(l, st)
     local mid = (head + tail) / 2
     local d, gap
     if head < 0 then
-        d, gap = head, -head                       -- not out yet: its nose is `gap` short
+        d, gap = head, -head                       -- not over the park yet: its nose is `gap` short
     elseif tail > len then
-        d, gap = tail, tail - len                  -- gone in: its tail is `gap` past
+        d, gap = tail, tail - len                  -- gone past: its tail is `gap` beyond
     else
         d, gap = math.min(math.max(mid, math.max(tail, 0)), math.min(head, len)), 0
     end
     local vol = math.max(0, 1 - gap / City.TrainFade)
     local a = st.dir > 0 and (l.from + d) or (l.to - d)
-    local x, y, z = linePoint(l, a, l.deck + City.Viaduct.rail + 100)
+    local x, y, z = linePoint(l, a, l.deck + City.Viaduct.rail + 100, st.dir)
     return { x = x, y = y, z = z, vol = vol, a = a }
 end
 
--- The horn sounds once a run, as the nose comes out of the portal: true while
--- the head is within `window` of the portal mouth. A client that joins mid-run
+-- The horn sounds once a run, as the nose comes in over the park's wall:
+-- true while the head is within `window` of it. A client that joins mid-run
 -- does not hear a horn for a train already halfway across.
 City.HornWindow = 300
 function City.TrainHornDue(l, st)
@@ -318,8 +343,9 @@ local function carModel(i)
     return m, M
 end
 
--- One looping wheel-rumble channel per line, moved with the train and set to
--- its loudness every frame; stopped when the train is gone.
+-- One looping wheel-rumble channel per train (keyed line:cycle), moved with
+-- it and set to its loudness every frame; stopped once it is out of hearing
+-- or gone.
 City._sounds = City._sounds or {}
 local function lineSound(name, pos, on, vol)
     local s = City._sounds[name]
@@ -348,22 +374,23 @@ local function lineSound(name, pos, on, vol)
     if s.ch and s.ch:IsValid() then s.ch:SetPos(pos) s.ch:SetVolume(s.vol) end
 end
 
--- Draw every line's train at time t, and keep its sound with it. A train that
--- is not drawn (no car model on this client) makes no sound either.
+-- Draw every train on every line at time t, and keep its sound with it. A
+-- train that is not drawn (no car model on this client) makes no sound.
 City._trainBoards = {}
 local function drawTrains(layout, t)
     local used = 0
     local boards = {}
+    local heard = {}
     render.SuppressEngineLighting(true)
-    -- a fixed light: the cars spend half their run outside the map, where the
-    -- engine has no lighting to give them, and should not go black there
+    -- a fixed light: the cars spend most of their run outside the map, where
+    -- the engine has no lighting to give them, and should not go black there
     render.ResetModelLighting(0.45, 0.45, 0.48)
     render.SetModelLighting(BOX_TOP, 1, 0.98, 0.9)
     render.SetModelLighting(BOX_BACK, 0.9, 0.88, 0.8)
     for _, l in ipairs(layout.lines) do
-        local st = City.TrainAt(l, t)
-        local drawn = false
-        if st then
+        l._horned = l._horned or {}
+        for _, st in ipairs(City.TrainsAt(l, t)) do
+            local drawn = false
             for i = 1, l.cars do
                 used = used + 1
                 local m, M = carModel(used)
@@ -376,20 +403,26 @@ local function drawTrains(layout, t)
                     drawn = true
                 end
             end
-        end
-        if drawn then
-            local snd = City.TrainSoundAt(l, st)
-            lineSound(l.name, Vector(snd.x, snd.y, snd.z), true, snd.vol)
-            -- the horn, once a run, as the nose comes out of the portal
-            if l._horn ~= st.cycle and City.TrainHornDue(l, st) then
-                l._horn = st.cycle
-                local hx, hy, hz = City.CarPos(l, st, 1)
-                if sound and sound.Play then sound.Play(City.TrainHorn, Vector(hx, hy, hz), 95, 100, 0.6) end
+            if drawn then
+                local snd = City.TrainSoundAt(l, st)
+                if snd.vol > 0 then
+                    local key = l.name .. ":" .. st.cycle
+                    heard[key] = true
+                    lineSound(key, Vector(snd.x, snd.y, snd.z), true, snd.vol)
+                end
+                -- the horn, once a run, as the nose comes in over the wall
+                if not l._horned[st.cycle] and City.TrainHornDue(l, st) then
+                    l._horned[st.cycle] = true
+                    l._horned[st.cycle - 4] = nil
+                    local hx, hy, hz = City.CarPos(l, st, 1)
+                    if sound and sound.Play then sound.Play(City.TrainHorn, Vector(hx, hy, hz), 95, 100, 0.6) end
+                end
+                for _, b in ipairs(City.TrainBoards(l, st)) do boards[#boards + 1] = b end
             end
-            for _, b in ipairs(City.TrainBoards(l, st)) do boards[#boards + 1] = b end
-        else
-            lineSound(l.name, nil, false)
         end
+    end
+    for key in pairs(City._sounds) do
+        if not heard[key] then lineSound(key, nil, false) end
     end
     render.SuppressEngineLighting(false)
     City._trainBoards = boards
@@ -1134,7 +1167,7 @@ end
 
 -- A station sign: the line's roundel, then one row per direction of travel,
 -- "NORTHBOUND  SPOONER ST", in the same order on every sign of the line, so
--- the signs at both portals say the same direction goes to the same place
+-- the signs at both ends say the same direction goes to the same place
 -- (City.TransitRows). A sign with no `metro` line keeps the old one-name look.
 local function transitSign(s, pw, ph)
     makeMetroFonts()
@@ -1210,7 +1243,335 @@ local function streetSign(s, pw, ph)
     if num then draw.SimpleText(s.sub, "BMXCitySignSub", pw / 2 - 40, ph * 0.18, WHITE, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER) end
 end
 
-local LOOKS = { ad = adSign, transit = transitSign, street = streetSign }
+--------------------------------------------------------------------------
+-- Shop fronts (sh_city.lua B:storefronts): the whole street-floor front of
+-- one shop, painted once into its render target like any sign: the fascia
+-- with the shop's name across the top, the display window with what the shop
+-- sells in it, a stall riser under the glass, and the door, with its number
+-- over it and an OPEN card in it. The face is 192 units tall (the street
+-- floor and half the next); 240 panel px, 1.25 px a unit.
+--------------------------------------------------------------------------
+local shopFonts = false
+local SHOP_SIZES = { 52, 44, 38, 32, 26, 22, 18 }
+local function makeShopFonts()
+    if shopFonts then return end
+    shopFonts = true
+    for _, sz in ipairs(SHOP_SIZES) do
+        surface.CreateFont("BMXCityShop" .. sz, { font = "Roboto", size = sz, weight = 900, antialias = true })
+        surface.CreateFont("BMXCityShopSerif" .. sz, { font = "Georgia", size = sz, weight = 700, antialias = true })
+    end
+    surface.CreateFont("BMXCityShopSmall", { font = "Roboto", size = 16, weight = 800, antialias = true })
+end
+City.SHOP_SERIF = { bank = true, books = true, bakery = true, post = true, music = true, coffee = true }
+
+-- A small generator seeded by the shop's name: its window is laid out the
+-- same on every client, every time it is painted.
+local function shopRng(text)
+    local s = 7
+    for i = 1, #(text or "") do s = (s * 31 + text:byte(i)) % 2147483647 end
+    return function(a, b)
+        s = (s * 16807) % 2147483647
+        local f = (s - 1) / 2147483646
+        if a then return a + math.floor(f * (b - a + 1)) end
+        return f
+    end
+end
+
+local function rect(c, x, y, w, h) surface.SetDrawColor(c[1], c[2], c[3], c[4] or 255) surface.DrawRect(x, y, w, h) end
+local function dot(c, x, y, r) surface.SetDrawColor(c[1], c[2], c[3], c[4] or 255) surface.DrawPoly(disc(x, y, r, 14)) end
+-- a ring: a disc, its middle painted the glass's colour again
+local function ring(c, x, y, r, t, glass) dot(c, x, y, r) dot(glass, x, y, r - t) end
+-- a thick line, as a quad
+local function bar(c, x1, y1, x2, y2, t)
+    local dx, dy = x2 - x1, y2 - y1
+    local l = math.max(math.sqrt(dx * dx + dy * dy), 0.001)
+    local nx, ny = -dy / l * t / 2, dx / l * t / 2
+    surface.SetDrawColor(c[1], c[2], c[3], c[4] or 255)
+    surface.DrawPoly({ { x = x1 + nx, y = y1 + ny }, { x = x2 + nx, y = y2 + ny }, { x = x2 - nx, y = y2 - ny }, { x = x1 - nx, y = y1 - ny } })
+end
+
+local GLASS = { 46, 58, 64 }
+local BRIGHT = { { 220, 50, 50 }, { 250, 200, 40 }, { 60, 140, 230 }, { 70, 180, 90 }, { 240, 130, 30 }, { 200, 90, 200 }, { 240, 240, 240 } }
+
+-- What is in each kind of shop's window, drawn in the window's rectangle
+-- (x, y the top left, w, h); `r` the shop's own generator.
+local SHOP_WINDOWS = {}
+City.ShopWindows = SHOP_WINDOWS
+
+-- shelves of things: `item(x, base, r)` draws one standing on `base`, returns its width
+local function shelves(x, y, w, h, n, item, r)
+    for k = 1, n do
+        local base = y + h * k / (n + 0.4)
+        rect({ 120, 100, 80 }, x + 4, base, w - 8, 4)
+        local at = x + 10
+        while at < x + w - 24 do at = at + item(at, base, r) + 6 end
+    end
+end
+
+function SHOP_WINDOWS.pharmacy(x, y, w, h, r)
+    shelves(x, y, w, h, 3, function(a, base) local bw, bh = r(10, 18), r(14, 26)
+        rect(({ { 240, 240, 240 }, { 60, 160, 110 }, { 70, 120, 200 } })[r(1, 3)], a, base - bh, bw, bh) return bw end, r)
+    local cx, cy = x + w - 30, y + 26
+    rect({ 30, 170, 90 }, cx - 18, cy - 6, 36, 12) rect({ 30, 170, 90 }, cx - 6, cy - 18, 12, 36)
+end
+
+function SHOP_WINDOWS.bikes(x, y, w, h, r)
+    local n = math.max(1, math.floor(w / 130))
+    for i = 1, n do
+        local cx = x + w * (i - 0.5) / n
+        local base, rr = y + h - 8, math.min(30, h * 0.24)
+        local c = BRIGHT[r(1, #BRIGHT)]
+        ring({ 20, 20, 20 }, cx - rr * 1.3, base - rr, rr, 5, GLASS)
+        ring({ 20, 20, 20 }, cx + rr * 1.3, base - rr, rr, 5, GLASS)
+        bar(c, cx - rr * 1.3, base - rr, cx, base - rr, 5)
+        bar(c, cx, base - rr, cx + rr * 0.6, base - rr * 2.1, 5)
+        bar(c, cx - rr * 1.3, base - rr, cx - rr * 0.2, base - rr * 2, 5)
+        bar(c, cx - rr * 0.2, base - rr * 2, cx + rr * 0.6, base - rr * 2.1, 5)
+        bar(c, cx + rr * 0.6, base - rr * 2.1, cx + rr * 1.3, base - rr, 5)
+    end
+end
+
+function SHOP_WINDOWS.bakery(x, y, w, h, r)
+    shelves(x, y, w, h, 2, function(a, base) local lw = r(22, 34)
+        local c = ({ { 200, 140, 70 }, { 170, 100, 50 }, { 230, 190, 120 }, { 255, 190, 210 } })[r(1, 4)]
+        surface.SetDrawColor(c[1], c[2], c[3], 255)
+        local poly = {}
+        for i = 0, 12 do local t = math.pi + math.pi * i / 12 poly[#poly + 1] = { x = a + lw / 2 + math.cos(t) * lw / 2, y = base + math.sin(t) * lw * 0.45 } end
+        surface.DrawPoly(poly)
+        return lw end, r)
+    -- a cake on a stand
+    local cx = x + w - 40
+    rect({ 200, 200, 210 }, cx - 4, y + h - 30, 8, 24)
+    rect({ 255, 230, 240 }, cx - 26, y + h - 58, 52, 28) rect({ 240, 120, 160 }, cx - 18, y + h - 76, 36, 18)
+end
+
+function SHOP_WINDOWS.books(x, y, w, h, r)
+    shelves(x, y, w, h, 3, function(a, base) local bw, bh = r(6, 11), r(20, 30)
+        rect(({ { 140, 30, 30 }, { 30, 60, 120 }, { 40, 100, 50 }, { 200, 170, 90 }, { 90, 50, 30 } })[r(1, 5)], a, base - bh, bw, bh)
+        return bw - 4 end, r)
+end
+
+local function counter(x, y, w, h, top, r)
+    rect({ 90, 60, 40 }, x + 6, y + h - 34, w - 12, 34) rect(top, x + 2, y + h - 40, w - 4, 8)
+    for sx = x + 24, x + w - 24, 46 do
+        rect({ 60, 60, 66 }, sx - 2, y + h - 22, 4, 22)
+        dot({ 200, 40, 40 }, sx, y + h - 24, 9)
+    end
+end
+function SHOP_WINDOWS.deli(x, y, w, h, r)
+    counter(x, y, w, h, { 230, 230, 220 }, r)
+    rect({ 30, 30, 30 }, x + 14, y + 10, math.min(110, w * 0.45), 42)
+    for k = 0, 3 do rect({ 230, 230, 230 }, x + 20, y + 16 + k * 9, r(40, 90), 4) end
+end
+function SHOP_WINDOWS.diner(x, y, w, h, r)
+    counter(x, y, w, h, { 220, 60, 60 }, r)
+    dot({ 240, 240, 240 }, x + w - 36, y + 34, 22) dot({ 30, 120, 160 }, x + w - 36, y + 34, 16)
+end
+function SHOP_WINDOWS.coffee(x, y, w, h, r)
+    counter(x, y, w, h, { 150, 110, 70 }, r)
+    for cx = x + 30, x + w - 30, 52 do
+        rect({ 245, 240, 230 }, cx - 10, y + h - 60, 20, 20) rect({ 245, 240, 230 }, cx + 9, y + h - 54, 6, 8)
+    end
+end
+function SHOP_WINDOWS.pizza(x, y, w, h, r)
+    counter(x, y, w, h, { 240, 240, 240 }, r)
+    local cx, cy, rr = x + w / 2, y + h * 0.4, math.min(40, h * 0.3)
+    dot({ 220, 170, 90 }, cx, cy, rr) dot({ 210, 70, 40 }, cx, cy, rr - 6)
+    for _ = 1, 9 do dot({ 160, 30, 30 }, cx + r(-20, 20), cy + r(-20, 20), 5) end
+end
+
+function SHOP_WINDOWS.flowers(x, y, w, h, r)
+    for px = x + 22, x + w - 22, 40 do
+        local base = y + h - 6
+        surface.SetDrawColor(150, 80, 50, 255)
+        surface.DrawPoly({ { x = px - 14, y = base - 24 }, { x = px + 14, y = base - 24 }, { x = px + 10, y = base }, { x = px - 10, y = base } })
+        rect({ 50, 120, 50 }, px - 2, base - 56, 4, 32)
+        local c = ({ { 230, 40, 60 }, { 250, 210, 40 }, { 250, 140, 190 }, { 240, 120, 30 }, { 160, 80, 200 } })[r(1, 5)]
+        for _ = 1, 6 do dot(c, px + r(-12, 12), base - 58 + r(-10, 8), 6) end
+    end
+end
+
+function SHOP_WINDOWS.records(x, y, w, h, r)
+    for ry = y + 10, y + h - 50, 46 do
+        for rx = x + 10, x + w - 48, 46 do
+            rect(BRIGHT[r(1, #BRIGHT)], rx, ry, 40, 40)
+            dot({ 15, 15, 15 }, rx + 20, ry + 20, 12) dot({ 230, 200, 60 }, rx + 20, ry + 20, 4)
+        end
+    end
+end
+
+function SHOP_WINDOWS.toys(x, y, w, h, r)
+    shelves(x, y, w, h, 2, function(a, base)
+        local k = r(1, 3)
+        if k == 1 then local rr = r(8, 14) dot(BRIGHT[r(1, 6)], a + rr, base - rr, rr) return rr * 2 end
+        if k == 2 then local s = r(14, 22) rect(BRIGHT[r(1, 6)], a, base - s, s, s) return s end
+        -- a teddy
+        dot({ 160, 100, 50 }, a + 12, base - 12, 12) dot({ 160, 100, 50 }, a + 12, base - 30, 9)
+        dot({ 160, 100, 50 }, a + 5, base - 37, 4) dot({ 160, 100, 50 }, a + 19, base - 37, 4)
+        return 24
+    end, r)
+end
+
+function SHOP_WINDOWS.hardware(x, y, w, h, r)
+    shelves(x, y, w, h, 2, function(a, base)
+        if r(1, 2) == 1 then
+            local c = BRIGHT[r(1, 6)]
+            rect(c, a, base - 22, 18, 22) rect({ 170, 170, 175 }, a - 1, base - 25, 20, 4)
+            return 18
+        end
+        rect({ 130, 90, 50 }, a + 6, base - 34, 5, 34) rect({ 110, 110, 116 }, a, base - 38, 18, 9)
+        return 18
+    end, r)
+end
+
+function SHOP_WINDOWS.barber(x, y, w, h, r)
+    -- the pole, and a chair
+    local px = x + 16
+    rect({ 240, 240, 240 }, px - 8, y + 8, 16, h - 16)
+    for sy = y + 8, y + h - 20, 18 do bar({ 200, 30, 30 }, px - 8, sy + 12, px + 8, sy, 5) bar({ 40, 60, 160 }, px - 8, sy + 21, px + 8, sy + 9, 4) end
+    local cx = x + w * 0.6
+    rect({ 30, 30, 34 }, cx - 4, y + h - 30, 8, 30) rect({ 140, 30, 30 }, cx - 24, y + h - 56, 48, 26)
+    rect({ 140, 30, 30 }, cx - 24, y + h - 92, 12, 40) rect({ 200, 200, 210 }, x + w * 0.35, y + 12, w * 0.5, 36)
+end
+
+function SHOP_WINDOWS.laundry(x, y, w, h, r)
+    for mx = x + 8, x + w - 56, 56 do
+        rect({ 225, 228, 232 }, mx, y + h - 60, 50, 56)
+        ring({ 120, 130, 140 }, mx + 25, y + h - 30, 17, 4, { 70, 110, 150 })
+        rect({ 90, 100, 110 }, mx + 4, y + h - 58, 42, 5)
+    end
+end
+
+function SHOP_WINDOWS.bank(x, y, w, h, r)
+    for cx = x + 20, x + w - 20, 60 do rect({ 200, 196, 186 }, cx - 7, y + 6, 14, h - 6) end
+    draw.SimpleText("EST. 1902", "BMXCityShopSmall", x + w / 2, y + h * 0.45, Color(220, 186, 100), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+end
+
+function SHOP_WINDOWS.souvenir(x, y, w, h, r)
+    for px = x + 10, x + w - 40, 44 do
+        local c = BRIGHT[r(1, 6)]
+        surface.SetDrawColor(c[1], c[2], c[3], 255)
+        surface.DrawPoly({ { x = px, y = y + 12 }, { x = px + 40, y = y + 22 }, { x = px, y = y + 32 } })
+    end
+    shelves(x, y + 30, w, h - 30, 2, function(a, base) local c = BRIGHT[r(1, 7)] rect(c, a, base - 20, 26, 20) rect({ 250, 250, 250 }, a + 3, base - 17, 20, 9) return 26 end, r)
+end
+
+function SHOP_WINDOWS.candy(x, y, w, h, r)
+    shelves(x, y, w, h, 2, function(a, base)
+        rect({ 210, 225, 230, 255 }, a, base - 32, 24, 32) rect({ 200, 60, 60 }, a - 2, base - 36, 28, 6)
+        for _ = 1, 5 do dot(BRIGHT[r(1, 6)], a + r(5, 19), base - r(5, 26), 4) end
+        return 24
+    end, r)
+end
+
+function SHOP_WINDOWS.music(x, y, w, h, r)
+    local kw = 12
+    local kx, ky, kh = x + 10, y + h - 46, 40
+    for k = 0, math.floor((w - 20) / kw) - 1 do rect({ 245, 245, 240 }, kx + k * kw, ky, kw - 2, kh) end
+    for k = 0, math.floor((w - 20) / kw) - 2 do if k % 7 ~= 2 and k % 7 ~= 6 then rect({ 20, 20, 24 }, kx + k * kw + 7, ky, 7, 24) end end
+    for _ = 1, 4 do local nx, ny = x + r(20, math.max(21, math.floor(w - 30))), y + r(14, 50) dot({ 245, 225, 240 }, nx, ny, 6) rect({ 245, 225, 240 }, nx + 4, ny - 22, 3, 22) end
+end
+
+function SHOP_WINDOWS.post(x, y, w, h, r)
+    shelves(x, y, w, h, 2, function(a, base) local bw, bh = r(20, 34), r(14, 26)
+        rect({ 180, 140, 90 }, a, base - bh, bw, bh) rect({ 150, 110, 70 }, a, base - bh / 2 - 2, bw, 3) return bw end, r)
+    rect({ 30, 60, 140 }, x + w - 50, y + 10, 40, 30) rect({ 255, 255, 255 }, x + w - 46, y + 14, 32, 4)
+end
+
+function SHOP_WINDOWS.general(x, y, w, h, r)
+    shelves(x, y, w, h, 3, function(a, base) local bw = r(12, 22) rect(BRIGHT[r(1, 7)], a, base - r(14, 26), bw, 26) return bw end, r)
+end
+
+-- The glass over a window: the street's reflection, a lighter sky at the top
+-- and a diagonal glint, laid over whatever is inside.
+local function glassOver(x, y, w, h)
+    surface.SetDrawColor(255, 255, 255, 26) surface.DrawRect(x, y, w, h * 0.3)
+    surface.SetDrawColor(255, 255, 255, 34)
+    surface.DrawPoly({ { x = x + w * 0.15, y = y }, { x = x + w * 0.35, y = y }, { x = x + w * 0.05, y = y + h }, { x = x - w * 0.15, y = y + h } })
+end
+
+local function shopSign(s, pw, ph)
+    makeShopFonts()
+    draw.NoTexture()
+    local px = ph / City.SHOP.h                    -- panel px a world unit
+    local fasc = City.SHOP.fascia * px
+    local top, bottom = -ph / 2, ph / 2
+    local bg, fg = s.bg or { 60, 60, 60 }, s.fg or { 255, 255, 255 }
+    local r = shopRng(s.text)
+    -- the shop's frame (painted wood/metal round everything) and its fascia
+    rect({ 34, 32, 30 }, -pw / 2, top, pw, ph)
+    rect(bg, -pw / 2 + 4, top + 4, pw - 8, fasc - 8)
+    rect({ fg[1], fg[2], fg[3], 120 }, -pw / 2 + 10, top + fasc - 12, pw - 20, 2)
+    local serif = City.SHOP_SERIF[s.kind]
+    local family = serif and "BMXCityShopSerif" or "BMXCityShop"
+    local text = s.text or ""
+    local textX = 0
+    if s.kind == "metro" then
+        -- the line's roundel each side of the name
+        makeMetroFonts()
+        local l = City.SignLine(City._layout, { metro = s.station })
+        local c = col(l and l.color, { 220, 40, 40 })
+        for _, sx in ipairs({ -pw / 2 + fasc * 0.6, pw / 2 - fasc * 0.6 }) do
+            roundel(sx, top + fasc / 2, fasc * 0.36, c, l and l.label or "M", "BMXCityMetro34")
+        end
+    end
+    draw.SimpleText(text, fit(family, SHOP_SIZES, text, pw - (s.kind == "metro" and fasc * 1.6 or 24)), textX, top + fasc / 2 - 2,
+        Color(fg[1], fg[2], fg[3]), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+
+    -- the front under it: stall riser, windows, door
+    local by = top + fasc
+    local riser = 16 * px
+    local doorW = City.SHOP.door * px
+    local doorX = (s.doorAt or 0.5) - 0.5
+    doorX = doorX * (pw - 2 * doorW)
+    local inner = { -pw / 2 + 6, by + 6, pw - 12, bottom - riser - by - 6 }
+    rect({ 70, 66, 62 }, -pw / 2 + 4, bottom - riser, pw - 8, riser - 4)
+    if s.kind == "metro" then
+        -- the way in: a wide opening, stairs going up into the dark
+        local ow = math.min(pw - 40, 420 * px / 1.25)
+        local ox = -ow / 2
+        rect({ 14, 14, 16 }, ox, by + 10, ow, bottom - by - 10)
+        local steps = 9
+        for k = 0, steps - 1 do
+            local f = k / steps
+            local sy = bottom - (bottom - by - 20) * (1 - (1 - f) * (1 - f))
+            rect({ 60 + 70 * (1 - f), 60 + 70 * (1 - f), 64 + 70 * (1 - f) }, ox + 6 + f * ow * 0.18, sy - 3, ow - 12 - f * ow * 0.36, 4)
+        end
+        bar({ 180, 180, 186 }, ox + 10, bottom - 8, ox + ow * 0.2, by + 30, 4)
+        bar({ 180, 180, 186 }, ox + ow - 10, bottom - 8, ox + ow * 0.8, by + 30, 4)
+        if s.sub then draw.SimpleText(s.sub, "BMXCityShopSmall", 0, by + 22, Color(220, 220, 220), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER) end
+        return
+    end
+    -- the windows either side of the door
+    local doorL, doorR = doorX - doorW / 2, doorX + doorW / 2
+    local wins = {}
+    if doorL - inner[1] > 30 then wins[#wins + 1] = { inner[1], inner[2], doorL - 6 - inner[1], inner[4] } end
+    if inner[1] + inner[3] - doorR > 30 then wins[#wins + 1] = { doorR + 6, inner[2], inner[1] + inner[3] - doorR - 6, inner[4] } end
+    local fill = SHOP_WINDOWS[s.kind] or SHOP_WINDOWS.general
+    for _, wn in ipairs(wins) do
+        gradient(wn[1], wn[2], wn[3], wn[4], Color(70, 84, 92), Color(GLASS[1], GLASS[2], GLASS[3]), 8)
+        fill(wn[1], wn[2], wn[3], wn[4], r)
+        glassOver(wn[1], wn[2], wn[3], wn[4])
+        -- mullions
+        rect({ 34, 32, 30 }, wn[1], wn[2] + wn[4] * 0.22, wn[3], 4)
+        for mx = wn[1] + 110, wn[1] + wn[3] - 40, 110 do rect({ 34, 32, 30 }, mx, wn[2], 4, wn[4]) end
+    end
+    -- the door: a frame, a glazed leaf, a handle, the OPEN card; the number
+    -- in the fanlight over it
+    local dTop = by + 4
+    rect({ 34, 32, 30 }, doorL - 4, dTop, doorW + 8, bottom - dTop)
+    rect({ bg[1] * 0.7, bg[2] * 0.7, bg[3] * 0.7 }, doorL, dTop + 22, doorW, bottom - dTop - 22)
+    rect({ 60, 74, 82 }, doorL + 8, dTop + 30, doorW - 16, (bottom - dTop) * 0.5)
+    glassOver(doorL + 8, dTop + 30, doorW - 16, (bottom - dTop) * 0.5)
+    rect({ 210, 190, 110 }, doorL + doorW - 12, dTop + (bottom - dTop) * 0.6, 5, 14)
+    rect({ 250, 250, 240 }, doorL + doorW / 2 - 16, dTop + 40, 32, 13)
+    draw.SimpleText("OPEN", "BMXCityShopSmall", doorL + doorW / 2, dTop + 46, Color(200, 30, 30), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    rect({ 40, 46, 52 }, doorL, dTop, doorW, 20)
+    draw.SimpleText(s.num or "", "BMXCityShopSmall", doorL + doorW / 2, dTop + 10, Color(230, 220, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+end
+City.ShopSign = shopSign
+
+local LOOKS = { ad = adSign, transit = transitSign, street = streetSign, shop = shopSign }
 City.Looks = LOOKS
 
 -- Signs are painted boards, not screens: lit by the light that falls on
@@ -1245,7 +1606,12 @@ function City.SignFaceLight(s, layout)
     if (s.look or "ad") == "ad" and (s.style == "tv" or s.style == "neon") then return 1, 1, { 1, 1, 1 } end
     local L = City.SignLight(s, layout)
     local top, bottom = L, L * 0.88
-    if City.SignFloodlit(s) then top, bottom = math.min(1, L + City.SIGN_FLOOD), math.min(1, L + City.SIGN_FLOOD * 0.35) end
+    if City.SignFloodlit(s) then
+        -- its own lamps light the top more than the foot, however bright the
+        -- day is where it stands
+        top = math.min(1, L + City.SIGN_FLOOD)
+        bottom = math.min(top - City.SIGN_FLOOD * 0.3, L + City.SIGN_FLOOD * 0.35)
+    end
     -- the afternoon's warmth, half strength: paint is still its own colour
     local w = m.light or { 1, 1, 1 }
     return top, bottom, { (1 + w[1]) / 2, (1 + w[2]) / 2, (1 + w[3]) / 2 }

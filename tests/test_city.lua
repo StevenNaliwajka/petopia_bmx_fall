@@ -5,7 +5,7 @@
     What can go wrong with a city nobody here can look at:
       - something solid lands on a ramp, or in a lane riders use
       - a viaduct is low enough to hit off the halfpipe
-      - a train runs out of its portal into open air, or through a wall
+      - a train runs into a building, or ends in open air
       - the server's colliders and the client's picture disagree
       - it builds a different city every session
     The ramp footprints below are each ramp's WorldSpaceAABB, read off the
@@ -191,29 +191,7 @@ T.test("each pier's cap meets its viaduct's underside, and its post the line abo
     end
 end)
 
-T.test("every portal is swallowed by a building tall enough to hold it", function()
-    local City, L = city()
-    local V = City.Viaduct
-    for _, l in ipairs(L.lines) do
-        local ends = l.axis == "y" and { "south", "north" } or { "west", "east" }
-        local need = l.deck + V.truss + 64
-        for _, side in ipairs(ends) do
-            local covered = false
-            for _, b in ipairs(L.rows[side]) do
-                local a0, a1 = (l.axis == "y") and b[1] or b[2], (l.axis == "y") and b[4] or b[5]
-                if a0 <= l.at - V.width and a1 >= l.at + V.width and b[6] >= need then covered = true end
-                -- a portal straddling two buildings: both must be tall enough
-                if a0 < l.at + V.width and a1 > l.at - V.width then
-                    T.ok(b[6] >= need, l.name .. " " .. side .. " building " .. b[6] .. " under the portal top " .. need)
-                    covered = covered or (b[6] >= need)
-                end
-            end
-            T.ok(covered, l.name .. " has a building at its " .. side .. " end")
-        end
-    end
-end)
-
-T.test("trains: come out of one portal, go in the other, alternate, never collide", function()
+T.test("trains: come in from past the city, go out past it, alternate, never collide", function()
     local sv, world = F.server()
     local cl = F.client(world)
     local City = cl.env.BMX.City
@@ -222,8 +200,8 @@ T.test("trains: come out of one portal, go in the other, alternate, never collid
         local len = l.to - l.from
         local seen, dirs, first, last = false, {}, nil, nil
         for t = 0, l.period * 4, 0.05 do
-            local st = City.TrainAt(l, t)
-            if st then
+            local trains = City.TrainsAt(l, t)
+            for _, st in ipairs(trains) do
                 seen = true
                 dirs[st.cycle] = st.dir
                 first = first and math.min(first, st.head) or st.head
@@ -236,15 +214,27 @@ T.test("trains: come out of one portal, go in the other, alternate, never collid
                     T.near(d, City.TrainCar.length + City.TrainCar.gap, 0.01, l.name .. " car spacing")
                 end
             end
+            -- two trains on one track at once must never touch
+            for i = 1, #trains do
+                for j = i + 1, #trains do
+                    local a, b = trains[i], trains[j]
+                    if a.dir == b.dir then
+                        local a0, a1 = a.head - a.train, a.head
+                        local b0, b1 = b.head - b.train, b.head
+                        T.ok(a1 < b0 or b1 < a0, l.name .. " trains on one track overlap at " .. t)
+                    end
+                end
+            end
         end
         T.ok(seen, l.name .. " ran in four periods")
-        T.ok(first < -City.TrainCar.length, l.name .. " starts hidden behind its first portal")
-        T.ok(last > len, l.name .. " ends hidden behind its far portal")
+        T.ok(first <= -l.reach + l.speed * 0.05 + 1, l.name .. " starts " .. l.reach .. " out past its first wall")
+        T.ok(last >= len + l.reach - l.speed * 0.05 - 1, l.name .. " ends " .. l.reach .. " out past its far wall")
+        T.ok(l.reach + City.TrainLength(l.cars) <= l.extent, l.name .. " never runs off the end of its track")
         local d0, d1 = dirs[0], dirs[1]
         T.ok(d0 and d1 and d0 ~= d1, l.name .. " alternates direction")
-        -- the run is shorter than the period: never two trains on one line
-        local st = City.TrainAt(l, l.offset + 0.01)
-        T.ok(st and st.run < l.period, l.name .. " run " .. (st and st.run or -1) .. "s in a " .. l.period .. "s period")
+        -- on a track, one train after the last one that way: never two at once
+        local st = City.TrainAt(l, l.offset + 0.01, 0)
+        T.ok(st and st.run < 2 * l.period, l.name .. " run " .. (st and st.run or -1) .. "s, a train each way every " .. 2 * l.period .. "s")
     end
 end)
 
@@ -254,7 +244,7 @@ T.test("a car fits inside the truss it runs through", function()
     local City = cl.env.BMX.City
     local V = City.Viaduct
     -- train_outro_car01: 136 wide, 205 tall from its floor (measured from the model)
-    T.ok(136 < V.width - 2 * 16, "car width inside the chords")
+    T.ok(V.track + 136 / 2 < V.width / 2 - 16, "car width inside the chords, on its track")
     T.ok(V.rail + 205 < V.truss, "car roof under the top bracing")
 end)
 
@@ -424,9 +414,11 @@ end)
 T.test("the rooftop billboards stand on their building's roof, out of reach", function()
     local City, L = city()
     local n = 0
+    local def = City.Maps.gm_skatepark
     for _, s in ipairs(L.signs) do
         if s.roof then
             n = n + 1
+            T.eq(s.mount, "roof", s.text .. " mounted on a roof")
             T.ok(s.pos[3] - s.h / 2 > s.roof, s.text .. " above its roof")
             T.ok(s.pos[3] - s.h / 2 > 528, s.text .. " above the wall")
             -- within one building's width, so no neighbour hides part of it
@@ -438,12 +430,19 @@ T.test("the rooftop billboards stand on their building's roof, out of reach", fu
                 if top[ax] <= s.at - s.w / 2 and top[ax + 3] >= s.at + s.w / 2 then on = top end
             end
             T.ok(on and math.abs(on[6] - s.roof) < 0.01, s.text .. " fits on one roof")
+            T.ok(on == s.onRoof, s.text .. " on the roof it says")
             -- outside the play box: nobody rides into it
-            local p = City.Maps.gm_skatepark.park
+            local p = def.park
             T.ok(s.pos[1] < p[1] or s.pos[1] > p[4] or s.pos[2] < p[2] or s.pos[2] > p[5], s.text .. " outside the box")
         end
     end
-    T.eq(n, #City.Maps.gm_skatepark.billboards, "every billboard found a roof")
+    -- every billboard the map asks for, and any ad too big for its wall
+    T.ok(n >= #def.billboards, "every billboard found a roof: " .. n)
+    -- one board a roof
+    local seen = {}
+    for _, s in ipairs(L.signs) do
+        if s.roof then T.ok(not seen[s.onRoof], s.text .. " has its roof to itself") seen[s.onRoof] = true end
+    end
 end)
 
 T.test("an ad's sunburst rays stop at the board's edge", function()
@@ -523,7 +522,8 @@ end)
 T.test("greenery: no tree stands in front of a sign on the wall", function()
     local City, L = city()
     for _, s in ipairs(L.signs) do
-        if not s.roof then
+        -- (a shop front stands at street level behind the street's trees)
+        if not s.roof and not s.shop then
             for _, pl in ipairs(L.props) do
                 local P = City.Plants[pl.kind]
                 local along = math.abs(s.normal[1]) > 0.5 and pl.y or pl.x

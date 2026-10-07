@@ -138,6 +138,8 @@ City.Materials = {
     -- the park floor, laid over the map's one concrete slab
     slab = { tex = "concrete/concretefloor016a", w = 256, h = 256 },
     pave_brick = { tex = "brick/brickfloor001a", w = 128, h = 128 },
+    -- the paths across the beds to the shop doors
+    path = { tex = "brick/brickfloor001a", w = 64, h = 64 },
     pave_cobble = { tex = "stone/stonefloor011a", w = 192, h = 192 },
     kerbline = { tex = "concrete/concretewall010a", w = 64, h = 64 },
     rail = { tex = "metal/metalgrate016a", w = 64, h = 64, alpha = true },
@@ -158,9 +160,12 @@ City.Plants = {
     -- not a plant, but drawn the same way; `still`: no swaying in the wind
     lamp       = { model = "models/props_c17/lamppost03a_on.mdl", r = 110, h = 450, still = true },
 }
--- lamppost03a: 450 tall, its arm reaching ~95 along the model's +y to the
--- lamp head (measured on the server)
-City.LAMP = { reach = 92, height = 420 }
+-- lamppost03a_on: 450 tall; its lamp head hangs off the arm along the
+-- model's +y, from 69 to 105 out, its glowing underside (the
+-- lamppost03a_glow lens) at z 441 (read from the model's own vertices,
+-- props_c17/lamppost03a_on.vvd, 2026-10-07). The glow goes just under the
+-- lens, at its middle -- it used to sit at 420, a foot under the lamp.
+City.LAMP = { reach = 87, height = 438 }
 City.LITTER = { "litter_red", "litter_orange", "litter_brown", "litter_orange" }
 City.LEAF_COLOURS = { "leaves_red", "leaves_orange", "leaves_gold", "leaves_rust", "leaves_orange" }
 
@@ -229,7 +234,7 @@ City.Builder = B      -- for the tests (tests/test_signs.lua turns the window bl
 
 local function newBuilder(def)
     local b = setmetatable({ def = def, faces = {}, solids = {}, lines = {}, signs = {},
-                             buildings = {}, props = {}, lamps = {}, quads = 0, portals = {} }, B)
+                             buildings = {}, props = {}, lamps = {}, quads = 0 }, B)
     local v = def.view or def.park
     b.view = { v[1], v[2], v[3], v[4], v[5], v[6] }
     -- The sun, from the map's light_environment: shading is baked into vertex
@@ -423,13 +428,17 @@ end
 -- One building: a box with facades, a roof and a cornice, plus an optional
 -- setback tower on top.
 --------------------------------------------------------------------------
-function B:building(bd, rng)
+-- `dry`: take this building's draws from the generator and build nothing (a
+-- lot a street now runs through), so every building after it comes out of
+-- the seed exactly as it did before the street was cut.
+function B:building(bd, rng, dry)
     local style = City.Styles[bd.style] or City.Styles.brick
     local tint = bd.tint or 1
     local main = bd.win or rng.pick(style.win)
     local accent = rng.chance(0.4) and rng.pick(style.win) or nil
     local accentEvery = rng.int(3, 5)
     local doorAt = rng.int(0, 2)
+    if dry then return end
     local doorMat, shopMat = style.ground[1], style.ground[2] or style.ground[1]
     local pick = {
         ground = function(i) if (i % 4) == doorAt then return doorMat end return shopMat end,
@@ -482,48 +491,138 @@ local function lots(rng, from, to, minW, maxW)
 end
 City.Lots = lots
 
-function B:row(side, rowDef, rng, mustCover)
+-- Cut a row's lots round the streets the subway lines run down. A lot a
+-- street crosses keeps the parts either side of it; a part too narrow to be
+-- a building (City.MIN_PIECE) is given to the street instead, so the street
+-- never leaves a sliver standing. Returns each lot's pieces, in order.
+City.MIN_PIECE = 256
+local function cutLots(list, cuts)
+    for _, c in ipairs(cuts) do
+        for _, lot in ipairs(list) do
+            if lot[1] < c.a1 and lot[2] > c.a0 then
+                if lot[1] < c.a0 and c.a0 - lot[1] < City.MIN_PIECE then c.a0 = lot[1] end
+                if lot[2] > c.a1 and lot[2] - c.a1 < City.MIN_PIECE then c.a1 = lot[2] end
+            end
+        end
+    end
+    local pieces = {}
+    for i, lot in ipairs(list) do
+        local segs = { { lot[1], lot[2] } }
+        for _, c in ipairs(cuts) do
+            local keep = {}
+            for _, s in ipairs(segs) do
+                if s[1] < c.a1 and s[2] > c.a0 then
+                    if c.a0 > s[1] then keep[#keep + 1] = { s[1], c.a0 } end
+                    if c.a1 < s[2] then keep[#keep + 1] = { c.a1, s[2] } end
+                else
+                    keep[#keep + 1] = s
+                end
+            end
+            segs = keep
+        end
+        pieces[i] = segs
+    end
+    return pieces
+end
+City.CutLots = cutLots
+
+-- The station house: the low building a line passes over where it crosses
+-- the frontage. Tall enough to cover the park's wall, low enough to leave
+-- the line's girders `STATION_CLEAR` of air over its roof.
+City.STATION_CLEAR = 96
+City.STATION_STYLES = { "stone", "brick", "tan", "red" }
+
+-- `cuts`: the streets crossing this row ({ a0, a1, line, under }); with
+-- `stations`, each street gets a station house on the wall line (the
+-- frontage), without, it is left open (the back row).
+function B:row(side, rowDef, rng, cuts, stations)
     local F = City.FLOOR
     local ground = self.def.ground
     local list = lots(rng, side.from, side.to, rowDef.minWidth, rowDef.maxWidth)
-    local built = {}
+    local streets = {}
+    for _, c in ipairs(cuts or {}) do streets[#streets + 1] = { a0 = c.a0, a1 = c.a1, line = c.line, under = c.under } end
+    local pieces = cutLots(list, streets)
+    -- the parts a street made: their own generator, so the seed's buildings
+    -- elsewhere come out as they always have
+    local extra = Rng((self.def.seed or 1) + 7 + #self.buildings)
+    local built, plan = {}, {}
     for i, lot in ipairs(list) do
         local floors = rng.int(rowDef.minFloors, rowDef.maxFloors)
         local setback = (rowDef.offset or 0) + (rowDef.jitter and rng.int(0, rowDef.jitter / 16) * 16 or 0)
         local depth = rng.int(rowDef.minDepth / F, rowDef.maxDepth / F) * F
         local z1 = ground + floors * F
-        -- a lot a viaduct runs into must be tall enough to swallow its portal
-        for _, need in ipairs(mustCover or {}) do
-            if need.side == side and lot[1] < need.a1 and lot[2] > need.a0 then
-                z1 = math.max(z1, math.ceil((need.z - ground) / F + 2) * F + ground)
-            end
-        end
         local style = rowDef.styles[rng.int(1, #rowDef.styles)]
         local tint = 0.9 + rng.float() * 0.16
-        local bd = toBox(side, lot[1], lot[2], -(rowDef.inset or 0) + setback, depth + setback, rowDef.base or ground, z1)
-        bd.style, bd.tint, bd.street = style, tint, rowDef.street ~= false
-        bd.side, bd.lot = side.name, lot
-        built[#built + 1] = bd
 
         -- A setback tower: narrower, set further back, rising from the roof.
+        local tower
         if rowDef.towerChance and rng.chance(rowDef.towerChance) and (lot[2] - lot[1]) >= 3 * F then
             local tfloors = rng.int(rowDef.towerMin or 3, rowDef.towerMax or 8)
             local inA = F * rng.int(0, 1)
             local back = F * rng.int(1, 2)
-            local tb = toBox(side, lot[1] + inA, lot[2] - inA, -(rowDef.inset or 0) + setback + back,
-                depth + setback, z1, z1 + tfloors * F)
-            tb.style, tb.tint, tb.street = rng.chance(0.5) and style or rowDef.styles[rng.int(1, #rowDef.styles)], tint, false
-            tb.side, tb.lot = side.name, { lot[1] + inA, lot[2] - inA }
-            bd.tower = tb
+            local tstyle = rng.chance(0.5) and style or rowDef.styles[rng.int(1, #rowDef.styles)]
+            tower = { a0 = lot[1] + inA, a1 = lot[2] - inA, back = back, z1 = z1 + tfloors * F, style = tstyle }
+        end
+
+        local function piece(a0, a1)
+            local bd = toBox(side, a0, a1, -(rowDef.inset or 0) + setback, depth + setback, rowDef.base or ground, z1)
+            bd.style, bd.tint, bd.street = style, tint, rowDef.street ~= false
+            bd.side, bd.lot = side.name, { a0, a1 }
+            return bd
+        end
+        local segs = pieces[i]
+        local towerPlaced = false
+        for j, seg in ipairs(segs) do
+            local bd = piece(seg[1], seg[2])
+            built[#built + 1] = bd
+            plan[#plan + 1] = { bd = bd, rng = j == 1 and rng or extra }
+            if tower and not towerPlaced then
+                local t0, t1 = math.max(tower.a0, seg[1]), math.min(tower.a1, seg[2])
+                if t1 - t0 >= 3 * F then
+                    local tb = toBox(side, t0, t1, -(rowDef.inset or 0) + setback + tower.back, depth + setback, z1, tower.z1)
+                    tb.style, tb.tint, tb.street = tower.style, tint, false
+                    tb.side, tb.lot = side.name, { t0, t1 }
+                    bd.tower = tb
+                    towerPlaced = true
+                    -- the tower's draws are the lot's, wherever it now stands
+                    plan[#plan + 1] = { bd = tb, rng = rng }
+                end
+            end
+        end
+        if #segs == 0 then
+            -- the street took the whole lot
+            plan[#plan + 1] = { bd = piece(lot[1], lot[2]), rng = rng, dry = true }
+        end
+        if tower and not towerPlaced then
+            plan[#plan + 1] = { bd = piece(lot[1], lot[2]), rng = rng, dry = true }
         end
     end
+
+    -- the station houses, under the lines, on the wall line
+    if stations then
+        for _, st in ipairs(streets) do
+            local most = math.floor((st.under - City.STATION_CLEAR - ground) / F)
+            local least = math.ceil(((self.def.wallTop or 528) - ground) / F)
+            local floors = math.max(least, math.min(most, extra.int(4, 5)))
+            local bd = toBox(side, st.a0, st.a1, -(rowDef.inset or 0), self.def.stationDepth or 512, ground, ground + floors * F)
+            bd.style = City.STATION_STYLES[extra.int(1, #City.STATION_STYLES)]
+            bd.tint, bd.street = 0.92 + extra.float() * 0.1, true
+            bd.side, bd.lot, bd.station = side.name, { st.a0, st.a1 }, st.line
+            built[#built + 1] = bd
+            plan[#plan + 1] = { bd = bd, rng = extra }
+        end
+    end
+    local ax = side.axis == "x" and 1 or 2
+    table.sort(built, function(a, b) return a[ax] < b[ax] end)
 
     -- A side face is hidden up to the neighbour's roof when the neighbour sits
     -- flush beside it. Record that, so the hidden part is never drawn.
     for i, bd in ipairs(built) do
         bd.hidden = {}
         local function hide(nb, key)
-            if nb and math.abs((nb[side.axis == "x" and 2 or 1]) - (bd[side.axis == "x" and 2 or 1])) < 1 then
+            if not nb then return end
+            local touching = math.abs(nb[ax + 3] - bd[ax]) < 1 or math.abs(nb[ax] - bd[ax + 3]) < 1
+            if touching and math.abs((nb[side.axis == "x" and 2 or 1]) - (bd[side.axis == "x" and 2 or 1])) < 1 then
                 bd.hidden[key] = nb[6]
             end
         end
@@ -533,20 +632,35 @@ function B:row(side, rowDef, rng, mustCover)
             hide(built[i - 1], "0,-1") hide(built[i + 1], "0,1")
         end
     end
-    -- the signs on this wall find their building before its windows are laid
+    -- the signs on this wall find their building before its windows are
+    -- laid, and the shops take the street floor
     if self.wallSignsBySide and self.wallSignsBySide[side.name] then
         self:placeWallSigns(side, built, self.wallSignsBySide[side.name])
     end
-    for _, bd in ipairs(built) do
-        self:building(bd, rng)
-        if bd.tower then self:building(bd.tower, rng) end
-    end
+    if stations and self.def.storefronts then self:storefronts(side, built) end
+    for _, p in ipairs(plan) do self:building(p.bd, p.rng, p.dry) end
     return built
 end
 
 --------------------------------------------------------------------------
 -- The skyline: free-standing towers further out, all around.
 --------------------------------------------------------------------------
+-- Does a box stand in a subway line's street: within STREET_HALF of its axis
+-- (either side), anywhere past the park's wall along it?
+City.STREET_HALF = 192 + 256
+function B:inStreet(bx)
+    local p = self.def.park
+    for _, v in ipairs(self.def.viaducts or {}) do
+        local h = City.STREET_HALF
+        if v.axis == "y" then
+            if bx[1] < v.at + h and bx[4] > v.at - h and (bx[2] < p[2] or bx[5] > p[5]) then return true end
+        else
+            if bx[2] < v.at + h and bx[5] > v.at - h and (bx[1] < p[1] or bx[4] > p[4]) then return true end
+        end
+    end
+    return false
+end
+
 function B:skyline(sk, rng)
     local F = City.FLOOR
     local p = self.def.park
@@ -573,6 +687,9 @@ function B:skyline(sk, rng)
         -- never inside the inner rows
         local m = sk.clear
         if bx[1] < p[4] + m and bx[4] > p[1] - m and bx[2] < p[5] + m and bx[5] > p[2] - m then ok = false end
+        -- never in a subway line's street: the tower is placed as it always
+        -- was (so the ones after it are too), and built from no material
+        local inStreet = ok and self:inStreet(bx)
         if ok then
             local floors = rng.int(sk.minFloors, sk.maxFloors)
             bx[6] = self.def.ground + floors * F
@@ -585,16 +702,17 @@ function B:skyline(sk, rng)
             local sector = math.floor(((math.atan2(y - cy, x - cx) + math.pi) / (2 * math.pi)) * 8) % 8
             self.group = "sky:" .. sector
             placed[#placed + 1] = bx
-            self:building(bx, rng)
+            self:building(bx, rng, inStreet)
             -- a crown on some: a smaller block and a mast
             if rng.chance(sk.crownChance or 0.4) then
                 local i = F
                 local cb = { bx[1] + i, bx[2] + i, bx[6], bx[4] - i, bx[5] - i, bx[6] + F * rng.int(2, 4) }
                 if cb[4] > cb[1] and cb[5] > cb[2] then
                     cb.style, cb.tint, cb.street, cb.side = bx.style, bx.tint, false, "skyline"
-                    self:building(cb, rng)
+                    self:building(cb, rng, inStreet)
                     local mx, my = (cb[1] + cb[4]) / 2, (cb[2] + cb[5]) / 2
-                    self:box(mx - 8, my - 8, cb[6], mx + 8, my + 8, cb[6] + rng.int(4, 9) * 64, "steel", 0.8)
+                    local mast = rng.int(4, 9) * 64
+                    if not inStreet then self:box(mx - 8, my - 8, cb[6], mx + 8, my + 8, cb[6] + mast, "steel", 0.8) end
                 end
             end
         end
@@ -602,24 +720,58 @@ function B:skyline(sk, rng)
 end
 
 --------------------------------------------------------------------------
--- An elevated subway viaduct: a steel through-truss, deck and track, crossing
--- the park from one facade to the other, with a portal where it enters each
--- building.
+-- An elevated subway viaduct: a steel through-truss, deck and two tracks,
+-- crossing the park and running on out over the city to the horizon.
 --
---   { axis = "y", at = 1400, from = -1792, to = 768, deck = 1000 }
+--   { axis = "y", at = 1400, from = -1792, to = 768, deck = 1000, reach = 11000 }
 --
 -- The line runs along `axis` at `at` on the other axis; `deck` is the top of
--- the deck. Train cars run on it (see cl_city.lua), and the deck, girders and
--- truss walls are solid.
+-- the deck; `from`/`to` are the park's walls. It does NOT end in a building:
+-- where it crosses a wall it passes over a low station house standing in a
+-- gap in the frontage (B:row), then on down an open street between the back
+-- row and through the skyline, `reach` past the wall, beyond every building
+-- in the city. A train comes in from out there and goes back out there, so
+-- it is never seen to go into or come out of anything. Two tracks, one each
+-- way (right-hand running), so a train leaving and the next one coming in
+-- can both be on the line.
+--
+-- Train cars run on it (see cl_city.lua). Inside the park the deck, girders
+-- and truss walls are solid; out over the city nothing can reach them.
 --------------------------------------------------------------------------
 City.Viaduct = {
-    width = 192,      -- outside of the truss walls
+    width = 384,      -- outside of the truss walls
+    track = 96,       -- each track's centre, either side of the line's axis
     slab = 40,        -- deck thickness
     girder = 64,      -- plate girders under the deck edges
     truss = 224,      -- truss wall height above the deck
     rail = 6,         -- rail head above the deck
     gauge = 56,       -- rail centres
+    pierEvery = 1024, -- the piers holding it up out over the city
 }
+
+-- A car is a slot `length` long on the timetable (cl_city.lua draws a model
+-- in each). Here so the server and the tests know a train's length too.
+City.TrainCar = City.TrainCar or { length = 650, gap = 14, lift = 104 }
+
+-- How long a train of `cars` cars is, nose to tail.
+function City.TrainLength(cars)
+    local C = City.TrainCar
+    return cars * C.length + (cars - 1) * C.gap
+end
+
+-- How far past each wall a line's structure runs: its trains' reach, a whole
+-- train beyond that (a train starts with its nose at `reach`), and a span.
+function City.LineExtent(v)
+    return (v.reach or 0) + City.TrainLength(v.cars or 3) + 512
+end
+
+-- Which side of the line's axis a train going `dir` runs on: right-hand
+-- running, so northbound (+y) on the east track, eastbound (+x) on the south.
+function City.TrackOffset(l, dir)
+    local k = (City.Viaduct.track or 0) * (dir > 0 and 1 or -1)
+    if l.axis == "y" then return k end
+    return -k
+end
 
 -- local frame helpers: a = along the line, c = across it
 local function lineBox(v, a0, a1, c0, c1, z0, z1)
@@ -630,7 +782,8 @@ end
 function B:viaduct(v, name)
     local V = City.Viaduct
     local hw = V.width / 2
-    local a0, a1 = v.from, v.to
+    local ext = City.LineExtent(v)
+    local a0, a1 = v.from - ext, v.to + ext
     local deck = v.deck
     local bot = deck - V.slab
     local gb = bot - V.girder
@@ -648,10 +801,12 @@ function B:viaduct(v, name)
         x0, y0, z0, x1, y1, z1 = lineBox(v, a - 8, a + 8, -hw + 12, hw - 12, gb + 16, bot)
         self:box(x0, y0, z0, x1, y1, z1, "steel", 0.7)
     end
-    -- rails
-    for _, c in ipairs({ -V.gauge / 2, V.gauge / 2 }) do
-        x0, y0, z0, x1, y1, z1 = lineBox(v, a0, a1, c - 2, c + 2, deck, deck + V.rail)
-        self:box(x0, y0, z0, x1, y1, z1, { side = "steel", top = "steel" }, 1.1)
+    -- rails: a pair for each track
+    for _, t in ipairs({ -V.track, V.track }) do
+        for _, c in ipairs({ t - V.gauge / 2, t + V.gauge / 2 }) do
+            x0, y0, z0, x1, y1, z1 = lineBox(v, a0, a1, c - 2, c + 2, deck, deck + V.rail)
+            self:box(x0, y0, z0, x1, y1, z1, { side = "steel", top = "steel" }, 1.1)
+        end
     end
     -- truss walls: alpha-tested panels, both faces, so the train shows
     -- through the holes from below and from either side
@@ -676,53 +831,32 @@ function B:viaduct(v, name)
         self:box(x0, y0, z0, x1, y1, z1, "steel", 0.75)
     end
 
-    -- Portals: a dark opening with a concrete frame where the line enters
-    -- each building. The facade stands `inset` inside the wall, so these stand
-    -- a little further in again. The train, once past it, is behind the
-    -- facade and simply gone.
-    local inset = (self.def.frontage and self.def.frontage.inset or 4) + 2
-    local ph0, ph1 = gb - 24, tz + 40
-    for _, endA in ipairs({ { a0, 1 }, { a1, -1 } }) do
-        local a, dir = endA[1], endA[2]
-        local face = a + dir * inset
-        local n
-        if v.axis == "y" then n = { 0, dir, 0 } else n = { dir, 0, 0 } end
-        -- opening
-        local W = V.width + 48
-        local o, u
-        if v.axis == "y" then
-            o = { v.at - W / 2 * dir, face, ph1 } u = { dir, 0, 0 }
-        else
-            o = { face, v.at + W / 2 * dir, ph1 } u = { 0, -dir, 0 }
+    -- Out over the city it stands on piers in the street it runs down: a
+    -- concrete column and a crosshead under the girders, every pierEvery,
+    -- from past the station house to the far end. Nobody can reach them.
+    local first = (self.def.stationDepth or 512) + 256
+    for _, e in ipairs({ { v.from, -1 }, { v.to, 1 } }) do
+        for d = first, ext - 256, V.pierEvery do
+            local a = e[1] + e[2] * d
+            x0, y0, z0, x1, y1, z1 = lineBox(v, a - 40, a + 40, -40, 40, self.def.ground, gb - 40)
+            self:box(x0, y0, z0, x1, y1, z1, { side = "concrete" }, 0.9)
+            x0, y0, z0, x1, y1, z1 = lineBox(v, a - 48, a + 48, -hw - 16, hw + 16, gb - 40, gb)
+            self:box(x0, y0, z0, x1, y1, z1, { side = "concrete2", bottom = "concrete2" }, 0.85)
         end
-        self:quad("black", o, u, DOWN, W, ph1 - ph0, n, 1, 0, 0, false)
-        -- frame: lintel and two jambs, proud of the opening
-        local fr = 24
-        local function frame(ca, cb, za, zb)
-            local fa, fb = face, face + dir * fr
-            local bx0, by0, bz0, bx1, by1, bz1 = lineBox(v, math.min(fa, fb), math.max(fa, fb), ca, cb, za, zb)
-            self:box(bx0, by0, bz0, bx1, by1, bz1, { side = "concrete2", top = "concrete2", bottom = "concrete2" }, 0.9)
-            -- kept for the tests: no sign may touch a portal (tests/test_signs.lua)
-            self.portals[#self.portals + 1] = { line = name, box = { bx0, by0, bz0, bx1, by1, bz1 } }
-        end
-        frame(-W / 2 - fr, W / 2 + fr, ph1, ph1 + fr)
-        frame(-W / 2 - fr, -W / 2, ph0 - fr, ph1)
-        frame(W / 2, W / 2 + fr, ph0 - fr, ph1)
-        frame(-W / 2 - fr, W / 2 + fr, ph0 - fr, ph0)
     end
 
-    -- Solid: deck + girders as one slab, and the truss walls.
-    x0, y0, z0, x1, y1, z1 = lineBox(v, a0, a1, -hw, hw, gb, deck)
+    -- Solid: deck + girders as one slab, and the truss walls, over the park.
+    x0, y0, z0, x1, y1, z1 = lineBox(v, v.from, v.to, -hw, hw, gb, deck)
     self:solid(name, x0, y0, z0, x1, y1, z1)
     for _, c in ipairs({ -hw, hw - 8 }) do
-        x0, y0, z0, x1, y1, z1 = lineBox(v, a0, a1, c, c + 8, deck, tz + 16)
+        x0, y0, z0, x1, y1, z1 = lineBox(v, v.from, v.to, c, c + 8, deck, tz + 16)
         self:solid(name, x0, y0, z0, x1, y1, z1)
     end
 
     self.lines[#self.lines + 1] = {
-        name = name, axis = v.axis, at = v.at, from = a0, to = a1, deck = deck,
+        name = name, axis = v.axis, at = v.at, from = v.from, to = v.to, deck = deck,
         period = v.period or 45, offset = v.offset or 0, cars = v.cars or 3,
-        speed = v.speed or 1100, runout = v.runout or 1600,
+        speed = v.speed or 1100, runout = v.reach or 0, reach = v.reach or 0, extent = ext,
         label = v.label, color = v.color, ends = v.ends,
     }
 end
@@ -732,7 +866,7 @@ end
 -- end to its `to` end, -1 back. `ends = { from = "...", to = "..." }` names the
 -- terminus beyond each end, so a train's destination is the end it is heading
 -- for, and the same direction of travel always goes to the same place: on the
--- train's front board, its rear board, and the station sign at either portal.
+-- train's front board, its rear board, and the station sign at either end.
 --------------------------------------------------------------------------
 local BOUND = { y = { [1] = "NORTHBOUND", [-1] = "SOUTHBOUND" },
                 x = { [1] = "EASTBOUND", [-1] = "WESTBOUND" } }
@@ -751,7 +885,7 @@ function City.LineBound(l, dir)
 end
 
 -- A station sign's rows: one per direction, in a fixed order (+1 first), so
--- the sign over either portal of a line reads exactly the same.
+-- the sign at either end of a line reads exactly the same.
 function City.TransitRows(l)
     return {
         { dir = 1, bound = City.LineBound(l, 1), dest = City.LineDest(l, 1) },
@@ -767,18 +901,27 @@ function City.SignLine(layout, s)
 end
 
 -- A pier: a concrete column from the park floor to the underside of a
--- viaduct, with a cap. Solid, because it stands where riders ride.
+-- viaduct, with a cap. Solid, because it stands where riders ride. The cap
+-- is a crosshead reaching out under both girders of the line it carries.
 function B:pier(p, name)
     local h = (p.size or 96) / 2
     local x, y = p.x, p.y
     local z0, z1 = self.def.ground, p.top
+    local V = City.Viaduct
+    local cx, cy = h + 24, h + 24
+    for _, v in ipairs(self.def.viaducts or {}) do
+        if v.deck - V.slab - V.girder == p.top then
+            if v.axis == "y" and math.abs(v.at - x) < 1 then cx = V.width / 2 + 16 end
+            if v.axis == "x" and math.abs(v.at - y) < 1 then cy = V.width / 2 + 16 end
+        end
+    end
     self:box(x - h, y - h, z0, x + h, y + h, z1 - 32, { side = "concrete", top = "concrete" }, 1)
-    self:box(x - h - 24, y - h - 24, z1 - 32, x + h + 24, y + h + 24, z1, "concrete2", 0.95)
+    self:box(x - cx, y - cy, z1 - 32, x + cx, y + cy, z1, "concrete2", 0.95)
     -- a kerb plinth at the foot
     self:box(x - h - 8, y - h - 8, z0, x + h + 8, y + h + 8, z0 + 12, "concrete2", 0.8)
     self:solid(name, x - h - 8, y - h - 8, z0, x + h + 8, y + h + 8, z0 + 12)
     self:solid(name, x - h, y - h, z0 + 12, x + h, y + h, z1 - 32)
-    self:solid(name, x - h - 24, y - h - 24, z1 - 32, x + h + 24, y + h + 24, z1)
+    self:solid(name, x - cx, y - cy, z1 - 32, x + cx, y + cy, z1)
     -- a steel post from this pier's viaduct up to one crossing above, if any
     if p.postFrom and p.postTo then
         self:box(x - 16, y - 16, p.postFrom, x + 16, y + 16, p.postTo, "steel", 0.8)
@@ -801,9 +944,10 @@ end
 -- covers a window (tests/test_signs.lua checks every sign against every
 -- window). Not how a real street works; it reads better.
 --------------------------------------------------------------------------
-City.SignPanelPx = { ad = 360, transit = 200, street = 170 }
+City.SignPanelPx = { ad = 360, transit = 200, street = 170, shop = 240 }
 City.SIGN_BORDER = 28            -- panel px of frame round the board
-City.SIGN_RT = { ad = { 1024, 512 }, transit = { 1024, 256 }, street = { 1024, 256 } }
+City.SignBorder = { shop = 0 }   -- a shop front is the whole front: no frame
+City.SIGN_RT = { ad = { 1024, 512 }, transit = { 1024, 256 }, street = { 1024, 256 }, shop = { 1024, 256 } }
 City.SIGN_CASE = 18              -- a wall sign's case: wall to face
 City.SIGN_BACK = 10              -- a free-standing sign's case behind its face
 City.SIGN_LAMP = { arm = 46, rise = 28, n = 4 }
@@ -822,7 +966,7 @@ function City.SignFrame(s)
     local look = s.look or "ad"
     local px = City.SignPanelPx[look] or 360
     local scale = s.h / px
-    local B = City.SIGN_BORDER
+    local B = City.SignBorder[look] or City.SIGN_BORDER
     local pw = s.w / scale
     return { pw = pw, ph = px, ow = pw + 2 * B, oh = px + 2 * B, scale = scale, border = B,
              fw = s.w + 2 * B * scale, fh = s.h + 2 * B * scale, rt = City.SIGN_RT[look] or City.SIGN_RT.ad }
@@ -831,31 +975,59 @@ end
 -- The viewer's right, looking at a face with normal n (pointing at them).
 function City.SignRight(n) return { -n[2], n[1], 0 } end
 
+-- Ads are BILLBOARDS, up high: each one goes to the top of its building's
+-- facade, under the cornice, on a steel catwalk with its floodlights over it
+-- -- never down among the windows of the lower floors or the shops. A
+-- building too low to hold the board with its foot at BILLBOARD_MIN_FLOORS
+-- floors up stands it on its roof instead (B:billboard, on legs).
+City.BILLBOARD_MIN_FLOORS = 4          -- z 576 on a 64 floor: over the wall's top
+City.CATWALK = { out = 40, deck = 12, drop = 20, rail = 30 }
+
+function City.BillboardMinZ(def)
+    return (def.ground or 0) + City.BILLBOARD_MIN_FLOORS * City.FLOOR
+end
+
 function B:placeWallSigns(side, built, list)
     local ax = side.axis == "x" and 1 or 2
     local lo_i = side.axis == "x" and 2 or 1
     local p = self.def.park
     local w0, w1 = side.axis == "x" and p[1] or p[2], side.axis == "x" and p[4] or p[5]
     local n = side.axis == "x" and { 0, -side.out, 0 } or { -side.out, 0, 0 }
+    local minZ = City.BillboardMinZ(self.def)
     self.blanks = self.blanks or {}
+    self.facadesTaken = self.facadesTaken or {}
     for _, sg in ipairs(list) do
         local a = sg.pos[ax]
-        local home
-        for _, bd in ipairs(built) do if bd[ax] <= a and bd[ax + 3] >= a then home = bd end end
         if sg.metro then
-            -- a station sign stays over its portal, whatever buildings are
-            -- behind it: the wall behind it is blanked all the same
-            local F = City.SignFrame(sg)
-            local wall = side.at - side.out * (self.def.frontage.inset or 4)
-            local face = wall + (n[1] ~= 0 and n[1] or n[2]) * City.SIGN_CASE
-            local pos = { 0, 0, sg.pos[3] }
-            pos[ax] = a
-            pos[lo_i] = face
-            sg.pos, sg.normal, sg.wall = pos, n, wall
-            local m = City.SIGN_MARGIN
-            self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = a - F.fw / 2 - m, a1 = a + F.fw / 2 + m,
-                                              z0 = sg.pos[3] - F.fh / 2 - m, z1 = sg.pos[3] + F.fh / 2 + m }
-        elseif home then
+            self:hangStationSign(side, sg, n)
+        else
+        -- its building: the one under it, else the nearest that has the room
+        -- (an ad keeps 300+ wide) and no other sign; never a station house,
+        -- unless it is that station's own sign
+        local isAd = (sg.look or "ad") == "ad"
+        local want = math.min(City.SignFrame(sg).fw, 400) + 96
+        local home, best
+        for _, bd in ipairs(built) do
+            local l0, l1 = math.max(bd[ax], w0), math.min(bd[ax + 3], w1)
+            local under = bd[ax] <= a and bd[ax + 3] >= a
+            local fits
+            if sg.metro then fits = bd.station == sg.metro and under
+            elseif bd.station then fits = false
+            elseif isAd then fits = l1 - l0 >= want and not self.facadesTaken[bd]
+            else fits = under end
+            if fits then
+                local d = (a < l0 and l0 - a) or (a > l1 and a - l1) or 0
+                if not best or d < best then home, best = bd, d end
+            end
+        end
+        if not home and isAd then
+            -- no facade free for it on this wall: it goes up on a roof
+            local bb = {}
+            for k, v in pairs(sg) do bb[k] = v end
+            bb.side, bb.at, bb.back, bb.pos, bb.normal = side.name, a, bb.back or 64, nil, nil
+            sg.toRoof = bb
+        end
+        if home then
             local lo, hi = math.max(home[ax], w0) + 48, math.min(home[ax + 3], w1) - 48
             local F = City.SignFrame(sg)
             if F.fw > hi - lo then
@@ -865,20 +1037,253 @@ function B:placeWallSigns(side, built, list)
             end
             a = math.min(math.max(a, lo + F.fw / 2), hi - F.fw / 2)
             local lampH = City.SignFloodlit(sg) and City.SIGN_LAMP.rise + 12 or 0
-            -- under the cornice (32) with a storey's breathing room
-            local z = math.min(sg.pos[3], home[6] - 32 - 48 - lampH - F.fh / 2)
-            -- the facade it hangs on, and its face standing proud of it
-            local wall = (side.out > 0) and home[lo_i] or home[lo_i + 3]
-            local face = wall + (n[1] ~= 0 and n[1] or n[2]) * City.SIGN_CASE
-            local pos = { 0, 0, z }
-            pos[ax] = a
-            pos[lo_i] = face
-            sg.pos, sg.normal, sg.wall, sg.home = pos, n, wall, home
-            local m = City.SIGN_MARGIN
-            self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = a - F.fw / 2 - m, a1 = a + F.fw / 2 + m,
-                                              z0 = z - F.fh / 2 - m, z1 = z + F.fh / 2 + lampH + m }
+            local billboard = (sg.look or "ad") == "ad"
+            -- under the cornice (32) with a storey's breathing room; a
+            -- billboard right up there, anything else no higher than asked
+            local top = home[6] - 32 - 48 - lampH - F.fh / 2
+            local z = billboard and top or math.min(sg.pos[3], top)
+            if billboard and z - F.fh / 2 - City.CATWALK.drop < minZ then
+                -- too low a building to carry it up high: onto a roof
+                local bb = {}
+                for k, v in pairs(sg) do bb[k] = v end
+                bb.side, bb.at, bb.back, bb.pos, bb.normal = side.name, a, bb.back or 64, nil, nil
+                sg.toRoof = bb
+            else
+                -- the facade it hangs on, and its face standing proud of it
+                local wall = (side.out > 0) and home[lo_i] or home[lo_i + 3]
+                local face = wall + (n[1] ~= 0 and n[1] or n[2]) * City.SIGN_CASE
+                local pos = { 0, 0, z }
+                pos[ax] = a
+                pos[lo_i] = face
+                sg.pos, sg.normal, sg.wall, sg.home = pos, n, wall, home
+                sg.mount = billboard and "wall" or nil
+                if billboard then
+                    -- one board to a facade, and no rooftop board right over
+                    -- it (a setback tower's roof, higher and further back, may)
+                    self.facadesTaken[home] = true
+                    self.roofsTaken = self.roofsTaken or {}
+                    self.roofsTaken[home] = true
+                end
+                local m = City.SIGN_MARGIN
+                local foot = billboard and City.CATWALK.drop + City.CATWALK.deck or 0
+                self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = a - F.fw / 2 - m, a1 = a + F.fw / 2 + m,
+                                                  z0 = z - F.fh / 2 - foot - m, z1 = z + F.fh / 2 + lampH + m }
+            end
+        end
         end
     end
+end
+
+-- A station sign hangs from the line it names, where the line comes over the
+-- wall: across the street under the viaduct, on two rods from its girders,
+-- facing the park, over the station house's roof -- as a real elevated
+-- railway signs its bridges. Never on the track side of the girders.
+City.STATION_SIGN = { gap = 20, rods = 0.42 }
+function B:hangStationSign(side, sg, n)
+    local V = City.Viaduct
+    local ax = side.axis == "x" and 1 or 2
+    local lo_i = side.axis == "x" and 2 or 1
+    local v
+    for _, x in ipairs(self.def.viaducts or {}) do if x.name == sg.metro then v = x end end
+    if not v then return end
+    local gb = v.deck - V.slab - V.girder
+    -- as wide as the rods under the girders allow
+    local F = City.SignFrame(sg)
+    local want = (V.width - 12) / (2 * City.STATION_SIGN.rods)
+    if F.fw > want then
+        local k = want / F.fw
+        sg.w, sg.h = sg.w * k, sg.h * k
+        F = City.SignFrame(sg)
+    end
+    local inset = self.def.frontage and self.def.frontage.inset or 4
+    local face = side.at - side.out * (inset + City.SIGN_CASE)
+    local pos = { 0, 0, gb - City.STATION_SIGN.gap - F.fh / 2 }
+    pos[ax] = v.at
+    pos[lo_i] = face
+    sg.pos, sg.normal, sg.hang, sg.rods = pos, n, gb, City.STATION_SIGN.rods
+end
+
+--------------------------------------------------------------------------
+-- Storefronts. Down at street level a building does not go on being windows
+-- to the ground: its street floor is shops. Every frontage building, over
+-- the park's wall, gets false shop fronts across its whole width -- a face
+-- painted with the shop's fascia and name, its display window and its door
+-- (cl_city.lua, the "shop" look) -- between stone pilasters, under a string
+-- course, with a striped awning where nothing stands in front of it. The
+-- station house's front is the metro's entrance.
+--
+-- The facade behind them (the street floor and the one over it) is laid as
+-- blank wall, like the wall behind any sign, so there is no window behind
+-- a shop's own window. Not walk-in: the park's wall is right behind them.
+--------------------------------------------------------------------------
+City.SHOP = {
+    h = 192,          -- the shop front, from the ground: the street floor and half the next
+    fascia = 56,      -- the fascia band at its top (the name)
+    case = 10,        -- the face stands this far out of the wall
+    pilaster = 16,    -- between shops and at each end
+    proud = 16,       -- the pilasters and string course stand this far out
+    band = 12,        -- the string course over the shop fronts
+    maxW = 560,       -- a building wider than this has several shops
+    minW = 192,       -- narrower than this, no shop at all
+    stationW = 800,   -- the metro entrance at most (its artwork's width)
+    door = 48,        -- a door's width, for the hedges and trees to keep clear of
+}
+
+function B:storefronts(side, built)
+    local sf = self.def.storefronts
+    local S = City.SHOP
+    local ax = side.axis == "x" and 1 or 2
+    local lo_i = side.axis == "x" and 2 or 1
+    local p = self.def.park
+    local w0, w1 = side.axis == "x" and p[1] or p[2], side.axis == "x" and p[4] or p[5]
+    local n = side.axis == "x" and { 0, -side.out, 0 } or { -side.out, 0, 0 }
+    local nn = n[1] ~= 0 and n[1] or n[2]
+    local r = City.SignRight(n)
+    local ra = (ax == 1) and r[1] or r[2]      -- +1 when the viewer's right is +along
+    local ground = self.def.ground
+    local inset = self.def.frontage and self.def.frontage.inset or 4
+    self.shops = self.shops or {}
+    self.shopKeep = self.shopKeep or {}
+    self.blanks = self.blanks or {}
+    self.shopIndex = self.shopIndex or 0
+    local list = sf.shops or {}
+    for _, bd in ipairs(built) do
+        local a0, a1 = math.max(bd[ax], w0), math.min(bd[ax + 3], w1)
+        if bd.street and a1 - a0 >= S.minW then
+            local style = City.Styles[bd.style] or City.Styles.brick
+            local wall = (side.out > 0) and bd[lo_i] or bd[lo_i + 3]
+            local face = wall + nn * S.case
+            local P = S.pilaster
+            local count = bd.station and 1 or math.max(1, math.ceil((a1 - a0 - P) / (S.maxW + P)))
+            local w = (a1 - a0 - P * (count + 1)) / count
+            local first = a0 + P
+            if bd.station and w > S.stationW then
+                first = (a0 + a1) / 2 - S.stationW / 2
+                w = S.stationW
+            end
+            local was = self.group
+            self.group = "front:" .. side.name
+            for k = 1, count do
+                local s0 = first + (k - 1) * (w + P)
+                local c = s0 + w / 2
+                local shop
+                if bd.station then
+                    shop = sf.station or { text = "METRO", kind = "metro" }
+                else
+                    self.shopIndex = self.shopIndex + 1
+                    shop = list[(self.shopIndex - 1) % math.max(#list, 1) + 1] or { text = "SHOP", kind = "general" }
+                end
+                -- the door: left, middle or right of the front, by turns
+                local doorAt = bd.station and 0.5 or ({ 0.18, 0.5, 0.82 })[self.shopIndex % 3 + 1]
+                local doorA = c + ra * (doorAt - 0.5) * (w - 2 * S.door)
+                local sg = {}
+                for key, v in pairs(shop) do sg[key] = v end
+                sg.look, sg.shop = "shop", true
+                sg.station = bd.station
+                sg.num = tostring(math.floor(math.abs(c) / 16) * 2 + 1)
+                sg.doorAt, sg.doorA = doorAt, doorA
+                local pos = { 0, 0, ground + S.h / 2 }
+                pos[ax] = c
+                pos[lo_i] = face
+                sg.pos, sg.normal, sg.wall, sg.shopOf = pos, n, wall, bd
+                sg.w, sg.h = w, S.h
+                sg.side, sg.a0, sg.a1 = side.name, s0, s0 + w
+                sg.caseMat = style.plain
+                self.shops[#self.shops + 1] = sg
+                self.shopKeep[#self.shopKeep + 1] = { side = side.name, a0 = s0 - P, a1 = s0 + w + P,
+                                                      z0 = ground, z1 = ground + S.h + S.band }
+                -- the pilaster on its left (and, after the last, its right)
+                for _, pa in ipairs(k == count and { s0 - P, s0 + w } or { s0 - P }) do
+                    self:wallBox(side, pa, pa + P, -inset - S.proud, -inset, ground, ground + S.h,
+                        { side = style.plain, top = style.plain }, 0.92)
+                end
+            end
+            -- the string course over them all, and the wall behind blank
+            self:wallBox(side, a0, a1, -inset - S.proud - 2, -inset, ground + S.h, ground + S.h + S.band,
+                { side = style.trim, top = style.plain, bottom = style.plain }, 0.9)
+            -- (all of its front: the part round the corner, past the park's
+            -- wall, is out of sight, and plain)
+            self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = bd[ax], a1 = bd[ax + 3], z0 = ground, z1 = ground + S.h + S.band }
+            self.group = was
+        elseif bd.street then
+            -- round the corner, wholly past the park's wall: out of sight, plain
+            local wall = (side.out > 0) and bd[lo_i] or bd[lo_i + 3]
+            self.blanks[#self.blanks + 1] = { n = n, plane = wall + nn * S.case, a0 = bd[ax], a1 = bd[ax + 3],
+                                              z0 = ground, z1 = ground + S.h + S.band }
+        end
+    end
+end
+
+-- Awnings over the shop windows: striped canvas sloping out from under the
+-- fascia, with a valance along its front edge. Only where nothing stands in
+-- front: no tree or lamp in front of the shop (they would grow through it),
+-- and no ramp against the wall (`noAwning`, measured from the ramps).
+City.AWNING = { out = 28, drop = 20, valance = 10, stripe = 24 }
+City.AwningColours = {
+    red = { 0.62, 0.12, 0.1 }, green = { 0.12, 0.36, 0.2 }, blue = { 0.14, 0.24, 0.46 },
+    gold = { 0.78, 0.56, 0.14 }, navy = { 0.08, 0.1, 0.24 }, brown = { 0.36, 0.2, 0.1 },
+    cream = { 0.86, 0.8, 0.66 },
+}
+for name, c in pairs(City.AwningColours) do
+    City.Materials["awn_" .. name] = { tex = "vgui/white", w = 128, h = 128, color = c }
+end
+
+function B:awnings(sf)
+    local A, S = City.AWNING, City.SHOP
+    local ground = self.def.ground
+    local inset = self.def.frontage and self.def.frontage.inset or 4
+    self.awningList = {}
+    for _, sg in ipairs(self.shops or {}) do
+        local Sd = self.sidesByName[sg.side]
+        self.group = "front:" .. sg.side
+        local clear = sg.awning ~= nil and not sg.station
+        for _, na in ipairs(sf.noAwning or {}) do
+            if na.side == sg.side and sg.a0 < na.to and sg.a1 > na.from then clear = false end
+        end
+        local d0 = -inset - S.case            -- the face
+        local d1 = d0 - A.out                 -- the awning's front edge
+        if clear then
+            for _, pl in ipairs(self.props) do
+                local along, out
+                if Sd.axis == "x" then along, out = pl.x, (pl.y - Sd.at) * Sd.out
+                else along, out = pl.y, (pl.x - Sd.at) * Sd.out end
+                -- a trunk or post (14 round) reaching under the canvas
+                local r = 14
+                if along > sg.a0 - r - 2 and along < sg.a1 + r + 2 and out + r + 2 > d1 and out - r - 2 < d0 then clear = false end
+            end
+        end
+        if clear then
+            local zt = ground + S.h - S.fascia
+            local zb = zt - A.drop
+            local n = sg.normal
+            local slope = math.sqrt(A.out * A.out + A.drop * A.drop)
+            -- down the slope, and the canvas's outward-and-up normal
+            local wv = { n[1] * A.out / slope, n[2] * A.out / slope, -A.drop / slope }
+            local nv = { n[1] * A.drop / slope, n[2] * A.drop / slope, A.out / slope }
+            local r = City.SignRight(n)
+            local cols = { "awn_" .. sg.awning, sg.awning2 and ("awn_" .. sg.awning2) or "awn_cream" }
+            -- stripes, from the viewer's left
+            local left = (Sd.axis == "x") and (r[1] > 0 and sg.a0 or sg.a1) or (r[2] > 0 and sg.a0 or sg.a1)
+            local w = sg.a1 - sg.a0
+            local count = math.max(1, math.floor(w / A.stripe + 0.5))
+            local sw = w / count
+            for i = 0, count - 1 do
+                local a = left + (r[1] + r[2]) * i * sw
+                local x, y
+                if Sd.axis == "x" then x, y = a, Sd.at + Sd.out * d0 else x, y = Sd.at + Sd.out * d0, a end
+                self:quad(cols[i % 2 + 1], { x, y, zt }, r, wv, sw, slope, nv, 0.95, 0, 0, false)
+                -- the valance hanging from the front edge
+                local fx, fy = x + n[1] * A.out, y + n[2] * A.out
+                self:quad(cols[i % 2 + 1], { fx, fy, zb }, r, DOWN, sw, A.valance, n, 0.85, 0, 0, false)
+            end
+            local x0, y0 = Sd.axis == "x" and sg.a0 or Sd.at + Sd.out * d1, Sd.axis == "x" and Sd.at + Sd.out * d1 or sg.a0
+            local x1, y1 = Sd.axis == "x" and sg.a1 or Sd.at + Sd.out * d0, Sd.axis == "x" and Sd.at + Sd.out * d0 or sg.a1
+            self.awningList[#self.awningList + 1] = { shop = sg, box = { math.min(x0, x1), math.min(y0, y1), zb - A.valance,
+                math.max(x0, x1), math.max(y0, y1), zt } }
+            sg.awned = true
+        end
+    end
+    self.group = nil
 end
 
 -- An axis-aligned box with one face left open (the sign's face goes there).
@@ -908,7 +1313,8 @@ function B:signCase(s)
     local y0, y1 = math.min(c[2], back[2]) - hy, math.max(c[2], back[2]) + hy
     local z0, z1 = c[3] - F.fh / 2, c[3] + F.fh / 2
     -- the open side is the face; a wall sign's back is against the wall
-    self:openBox(x0, y0, z0, x1, y1, z1, { side = "signcase" }, { n[1], n[2] }, 1)
+    -- (a shop front's reveal is the building's own stone)
+    self:openBox(x0, y0, z0, x1, y1, z1, { side = s.caseMat or "signcase" }, { n[1], n[2] }, 1)
     s.case = { x0, y0, z0, x1, y1, z1 }
     local function at(along, out, z) return { c[1] + r[1] * along + n[1] * out, c[2] + r[2] * along + n[2] * out, z } end
     local function bx(p, q, mats, tint)
@@ -927,9 +1333,29 @@ function B:signCase(s)
                { side = "signcase", top = "signcase", bottom = "lamplens" }, 1)
         end
     end
+    if s.mount == "wall" then
+        -- a billboard's catwalk: a grating along the foot of the board,
+        -- standing out from the wall on steel brackets, a railing along it
+        local C = City.CATWALK
+        local zc = z0 - C.drop
+        bx(at(-s.fw / 2, -depth, zc - C.deck), at(s.fw / 2, C.out, zc), { side = "steel", top = "grate", bottom = "steel" }, 0.8)
+        for _, f in ipairs({ -0.42, 0, 0.42 }) do
+            local a = s.fw * f
+            bx(at(a - 4, -depth, zc - C.deck - 40), at(a + 4, C.out * 0.6, zc - C.deck), "steel", 0.7)
+        end
+        local r0 = at(-s.fw / 2, C.out, zc + C.rail)
+        self:quad("rail", r0, r, DOWN, s.fw, C.rail, n, 0.8, 0, 0, false)
+        -- and the posts from the catwalk up to the board's foot
+        for _, f in ipairs({ -0.42, 0, 0.42 }) do
+            local a = s.fw * f
+            bx(at(a - 3, -depth * 0.5 - 3, zc), at(a + 3, -depth * 0.5 + 3, z0), "steel", 0.7)
+        end
+        s.catwalk = { zc - C.deck, zc }
+    end
     if s.hang then
         -- a station sign hangs from the viaduct's girders on two rods
-        for _, f in ipairs({ -0.36, 0.36 }) do
+        local spread = s.rods or 0.36
+        for _, f in ipairs({ -spread, spread }) do
             bx(at(F.fw * f - 3, -depth * 0.5 - 3, z1), at(F.fw * f + 3, -depth * 0.5 + 3, s.hang), "steel", 0.7)
         end
     end
@@ -955,15 +1381,27 @@ function B:billboard(bb)
         local lo, hi = bx[side.axis == "x" and 2 or 1], bx[side.axis == "x" and 5 or 4]
         return ((out > 0) and lo or hi) * out - side.at * out
     end
-    local roof, setback, lot
+    -- The roof it stands on: the building under `at`, else the nearest one
+    -- that will take it -- never a station house (the line runs over it), and
+    -- never a roof another board already stands on. Over the park's wall.
+    local p = self.def.park
+    local w0, w1 = side.axis == "x" and p[1] or p[2], side.axis == "x" and p[4] or p[5]
+    self.roofsTaken = self.roofsTaken or {}
+    local cands = {}
     for _, bd in ipairs(row) do
-        if bd[ax] <= bb.at and bd[ax + 3] >= bb.at then
-            -- on a setback tower, the sign goes up on the tower's roof
-            local top = bd.tower or bd
-            roof, setback, lot = top[6], nearOf(top), { top[ax], top[ax + 3] }
+        local top = bd.tower or bd
+        local l0, l1 = math.max(top[ax], w0), math.min(top[ax + 3], w1)
+        if not bd.station and not self.roofsTaken[top] and l1 - l0 >= 384 then
+            local d = (bb.at < l0 and l0 - bb.at) or (bb.at > l1 and bb.at - l1) or 0
+            cands[#cands + 1] = { top = top, d = d, lot = { l0, l1 } }
         end
     end
-    if not roof then return end
+    table.sort(cands, function(a, b) return a.d < b.d end)
+    local pick = cands[1]
+    if not pick then return end
+    self.roofsTaken[pick.top] = true
+    -- on a setback tower, the sign goes up on the tower's roof
+    local roof, setback, lot = pick.top[6], nearOf(pick.top), pick.lot
     -- the board stays on its own roof: a taller neighbour beside it would
     -- otherwise stand in front of the part that hangs over
     bb = setmetatable({}, { __index = bb })
@@ -997,7 +1435,8 @@ function B:billboard(bb)
     local sg = {}
     for k, v in pairs(getmetatable(bb).__index) do sg[k] = v end
     sg.w, sg.h, sg.at = bb.w, bb.h, bb.at
-    sg.pos, sg.normal, sg.roof = pos, nrm, roof
+    sg.pos, sg.normal, sg.roof, sg.onRoof = pos, nrm, roof, pick.top
+    sg.side, sg.mount, sg.toRoof = bb.side, "roof", nil
     self.signs[#self.signs + 1] = sg
 end
 
@@ -1031,7 +1470,7 @@ function B:plant(kind, x, y, z, yaw, scale)
 end
 
 -- Things greenery must keep off: the signs on the walls and roofs, and the
--- portals the trains run through. { side, a0, a1, z0, z1 } in wall terms.
+-- lines passing over the station houses. { side, a0, a1, z0, z1 } in wall terms.
 function B:keepOffs()
     local p, out = self.def.park, {}
     local function sideOf(n, pos)
@@ -1042,7 +1481,10 @@ function B:keepOffs()
     end
     for _, s in ipairs(self.signs) do
         local side, a = sideOf(s.normal, s.pos)
-        if s.roof then
+        if s.shop then
+            -- a shop front stands behind the bed, trees, lamps and all (its
+            -- door finds a gap between them: B:shopDoors)
+        elseif s.roof then
             -- a rooftop billboard: keep its roof clear in front of the board
             side = nil
             for name, S in pairs(self.sidesByName) do
@@ -1061,7 +1503,7 @@ function B:keepOffs()
     for _, v in ipairs(self.def.viaducts or {}) do
         local ends = v.axis == "y" and { "south", "north" } or { "west", "east" }
         for _, side in ipairs(ends) do
-            out[#out + 1] = { side = side, a0 = v.at - V.width - 64, a1 = v.at + V.width + 64,
+            out[#out + 1] = { side = side, a0 = v.at - V.width / 2 - 64, a1 = v.at + V.width / 2 + 64,
                               z0 = v.deck - V.slab - V.girder - 96, z1 = v.deck + V.truss + 128 }
         end
     end
@@ -1139,6 +1581,46 @@ function B:hedge(S, rng, a0, a1, d, z, h, w)
 end
 
 -- A planting bed on the park floor, against the wall.
+-- Put the door of every shop standing behind a bed (from a0 to a1 along wall
+-- S) where no tree trunk or lamp post stands in front of it: of the places a
+-- door can go in its front, the one furthest from any of them. Returns the
+-- doors' positions along the wall, in order.
+function B:shopDoors(S, a0, a1, front)
+    local D = City.SHOP.door
+    local gap = D / 2 + 8
+    local out = {}
+    for _, sg in ipairs(self.shops or {}) do
+        if sg.side == S.name and not sg.station and sg.a0 < a1 and sg.a1 > a0 and not sg.doorSet then
+            local best, bestD
+            for k = 0, 12 do
+                local f = 0.12 + 0.76 * k / 12
+                local da = (sg.a0 + sg.a1) / 2 + (City.SignRight(sg.normal)[S.axis == "x" and 1 or 2]) * (f - 0.5) * (sg.a1 - sg.a0 - 2 * D)
+                -- in the bed with room for its gap, or off the bed altogether
+                if (da > a0 + gap and da < a1 - gap) or da < a0 - gap or da > a1 + gap then
+                    -- room to the nearest trunk, post or bush in front of the shop
+                    local near = math.huge
+                    local function by(list, r)
+                        for _, pl in ipairs(list) do
+                            local along = S.axis == "x" and pl.x or pl.y
+                            local out_ = S.axis == "x" and (pl.y - S.at) * S.out or (pl.x - S.at) * S.out
+                            if out_ > front - 200 and out_ < front + 1 then near = math.min(near, math.abs(along - da) - (pl.r or r)) end
+                        end
+                    end
+                    by(self.props, 14)
+                    by(self.bushSpots or {}, 40)
+                    if not bestD or near > bestD then best, bestD = { f = f, a = da }, near end
+                end
+            end
+            if best then
+                sg.doorAt, sg.doorA, sg.doorSet = best.f, best.a, true
+                if best.a > a0 and best.a < a1 then out[#out + 1] = best.a end
+            end
+        end
+    end
+    table.sort(out)
+    return out
+end
+
 function B:bed(S, bd, g, rng, keep, name)
     local z0 = self.def.ground
     local kerb = g.kerb or 20
@@ -1183,7 +1665,9 @@ function B:bed(S, bd, g, rng, keep, name)
             end
             if at then
                 a = at
-                local x, y = wallXY(S, a, mid)
+                -- at the kerb, as a street's lamps stand: the shop fronts'
+                -- awnings reach out over the bed behind them
+                local x, y = wallXY(S, a, dIn + 18)
                 self:plant("lamp", x, y, soil, yaw, 1)
                 self:solid(name, x - 10, y - 10, z0 + kerb, x + 10, y + 10, z0 + 440)
                 local L = City.LAMP
@@ -1197,8 +1681,6 @@ function B:bed(S, bd, g, rng, keep, name)
         for _, la in ipairs(lampAt) do if math.abs(a - la) < 128 then return true end end
         return false
     end
-    -- the hedge along the front, the trees along the back
-    self:hedge(S, rng, bd.from + t + 4, bd.to - t - 4, dIn + 30, soil, 52, 32)
     local treeMin, treeMax = g.treeEvery and g.treeEvery[1] or 288, g.treeEvery and g.treeEvery[2] or 448
     local a = bd.from + rng.int(80, 160)
     local kinds = bd.trees or { "tree", "tree_small", "tree2", "tree_small", "poplar" }
@@ -1209,7 +1691,8 @@ function B:bed(S, bd, g, rng, keep, name)
         local sc = (kind == "poplar") and 0.55 + rng.float() * 0.1 or 0.75 + rng.float() * 0.25
         local h = P.h * sc
         if not keptOff(keep, S.name, a - P.r * sc * 0.6, a + P.r * sc * 0.6, soil, soil + h) and not nearLamp(a) then
-            local x, y = wallXY(S, a, mid + 8)
+            -- in the hedge line, clear of the awnings over the shop windows
+            local x, y = wallXY(S, a, mid - 14)
             self:plant(kind, x, y, soil, rng.int(0, 359), sc)
             -- the trunk is solid too
             self:solid(name, x - 12, y - 12, z0 + kerb, x + 12, y + 12, z0 + kerb + math.min(160, h * 0.4))
@@ -1217,15 +1700,37 @@ function B:bed(S, bd, g, rng, keep, name)
             -- something to see past: a low bush instead
             local x, y = wallXY(S, a, mid + 8)
             self:bush(x, y, soil, 72, 64, rng.float() * math.pi)
+            self.bushSpots = self.bushSpots or {}
+            self.bushSpots[#self.bushSpots + 1] = { x = x, y = y, r = 40 }
         end
         a = a + rng.int(treeMin / 16, treeMax / 16) * 16
+    end
+    -- the hedge along the front, with a gap and a paved path across the bed
+    -- to every shop door behind it; each door is put between the trees and
+    -- lamps first (B:shopDoors), so nothing grows in a doorway
+    local runs, a0h = {}, bd.from + t + 4
+    local doors = self:shopDoors(S, bd.from + t, bd.to - t, dOut)
+    local gap = City.SHOP.door / 2 + 8
+    -- (the hedge's bushes spill past its ends by up to 12)
+    for _, da in ipairs(doors) do
+        if da - gap - 12 > a0h then runs[#runs + 1] = { a0h, da - gap - 12 } end
+        a0h = math.max(a0h, da + gap + 12)
+        local px0, py0 = wallXY(S, da - gap + 4, dIn + t)
+        local px1, py1 = wallXY(S, da + gap - 4, dOut)
+        self:quad("path", { math.min(px0, px1), math.max(py0, py1), z0 + kerb - 3 }, { 1, 0, 0 }, { 0, -1, 0 },
+            math.abs(px1 - px0), math.abs(py1 - py0), { 0, 0, 1 }, 0.9)
+    end
+    if bd.to - t - 4 > a0h then runs[#runs + 1] = { a0h, bd.to - t - 4 } end
+    for _, run in ipairs(runs) do
+        if run[2] - run[1] > 24 then self:hedge(S, rng, run[1], run[2], dIn + 30, soil, 52, 32) end
     end
     -- ivy climbing the wall behind the bed
     local F = City.FLOOR
     a = bd.from
     while a + F <= bd.to do
         local h = F * rng.int(1, 3)
-        if rng.chance(g.ivy or 0.5) and not keptOff(keep, S.name, a, a + F, z0, z0 + h) then
+        if rng.chance(g.ivy or 0.5) and not keptOff(keep, S.name, a, a + F, z0, z0 + h)
+           and not keptOff(self.shopKeep or {}, S.name, a, a + F, z0, z0 + h) then
             self:wallQuad(S, "ivy_climb", a, -inset - 1.5, z0 + h, F, h, 0.95)
         end
         a = a + F
@@ -1237,9 +1742,13 @@ end
 -- the roof's front edge is; `room` how deep the planted strip may go.
 function B:roofGarden(S, a0, a1, front, room, z, g, rng, keep, small)
     if a1 - a0 < 192 then return end
-    if keptOff(keep, S.name, a0, a1, z, z + 560) then
-        -- a sign stands here: plant only the low planter, on the clear part
-        return
+    -- a billboard (or the line) stands on part of it: plant the parts beside it
+    for _, k in ipairs(keep) do
+        if k.side == S.name and a0 < k.a1 and a1 > k.a0 and z < k.z1 and z + 560 > k.z0 then
+            self:roofGarden(S, a0, k.a0, front, room, z, g, rng, keep, small)
+            self:roofGarden(S, k.a1, a1, front, room, z, g, rng, keep, small)
+            return
+        end
     end
     local d0 = front + 16
     -- the planter: a low concrete trough, grass on top
@@ -1528,17 +2037,26 @@ function City.Build(def)
     }
     b.sidesByName = S
 
-    -- Viaduct ends need tall enough buildings to swallow their portals.
-    local cover = {}
-    for _, v in ipairs(def.viaducts or {}) do
-        local V = City.Viaduct
-        local top = v.deck + V.truss + 64
-        local s0, s1
-        if v.axis == "y" then s0, s1 = S.south, S.north else s0, s1 = S.west, S.east end
-        for _, s in ipairs({ s0, s1 }) do
-            cover[#cover + 1] = { side = s, a0 = v.at - V.width, a1 = v.at + V.width, z = top }
+    -- The streets the subway lines run down: where a line crosses a wall, a
+    -- gap in the frontage (with a low station house in it, under the line)
+    -- and in the back row, so it runs on out over the city instead of into
+    -- a building. { side, a0, a1, line, under } in wall terms.
+    local V = City.Viaduct
+    local streets = {}
+    for i, v in ipairs(def.viaducts or {}) do
+        local half = V.width / 2 + (def.streetMargin or 128)
+        local ends = v.axis == "y" and { "south", "north" } or { "west", "east" }
+        for _, side in ipairs(ends) do
+            streets[#streets + 1] = { side = side, a0 = v.at - half, a1 = v.at + half,
+                                      line = v.name or ("line" .. i), under = v.deck - V.slab - V.girder }
         end
     end
+    local function streetsOn(side)
+        local out = {}
+        for _, st in ipairs(streets) do if st.side == side then out[#out + 1] = st end end
+        return out
+    end
+    b.streets = streets
 
     -- The signs, as copies (placing moves them; the definition stays as
     -- written). Wall signs go with their side's row, to be placed on a
@@ -1564,7 +2082,7 @@ function City.Build(def)
     b.rows = {}
     for _, key in ipairs({ "north", "south", "west", "east" }) do
         b.group = "front:" .. key
-        b.rows[key] = b:row(S[key], fr, rng, cover)
+        b.rows[key] = b:row(S[key], fr, rng, streetsOn(key), true)
     end
     -- the second row: taller, further back, gaps between
     if def.backRow then
@@ -1573,7 +2091,7 @@ function City.Build(def)
             local s2 = { name = key .. "2", axis = s.axis, at = s.at, out = s.out,
                 from = s.from - (s.axis == "y" and over or 0), to = s.to + (s.axis == "y" and over or 0) }
             b.group = "back:" .. key
-            b:row(s2, def.backRow, rng)
+            b:row(s2, def.backRow, rng, streetsOn(key))
         end
     end
     if def.skyline then b:skyline(def.skyline, rng) end
@@ -1585,9 +2103,13 @@ function City.Build(def)
     b.group = "via:piers"
     for i, pr in ipairs(def.piers or {}) do b:pier(pr, pr.name or ("pier" .. i)) end
 
-    for _, sg in ipairs(defSigns) do b.signs[#b.signs + 1] = sg end
+    -- (an ad its building is too low to hold high up goes up on a roof)
+    for _, sg in ipairs(defSigns) do if not sg.toRoof then b.signs[#b.signs + 1] = sg end end
     b.group = "front:roof"
     for _, bb in ipairs(def.billboards or {}) do b:billboard(bb) end
+    for _, sg in ipairs(defSigns) do if sg.toRoof then b:billboard(sg.toRoof) end end
+    -- the shops' fronts, after every other sign
+    for _, sg in ipairs(b.shops or {}) do b.signs[#b.signs + 1] = sg end
     -- every sign's case (and lamps, hangers), now that all are where they go
     for _, sg in ipairs(b.signs) do
         b.group = sg.group or (sg.roof and "front:roof" or "front:signs")
@@ -1597,11 +2119,13 @@ function City.Build(def)
     -- last, so the rest of the city is laid out exactly as it was without it
     if def.greenery then b:greenery(def.greenery) end
     if def.floor then b:floor(def.floor, Rng((def.seed or 1) + 2)) end
+    -- awnings last of all: only over a shop with no tree or lamp in front
+    if def.storefronts then b:awnings(def.storefronts) end
 
     return {
         faces = b.faces, solids = b.solids, lines = b.lines, signs = b.signs,
         buildings = b.buildings, props = b.props, lamps = b.lamps, quads = b.quads, rows = b.rows, def = def,
-        portals = b.portals,
+        streets = b.streets, shops = b.shops or {}, awnings = b.awningList or {},
         mood = def.mood,
     }
 end

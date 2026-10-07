@@ -79,24 +79,33 @@ BMX.City.Maps.gm_skatepark = {
     -- 517 above the halfpipe's coping (z 483), the tallest thing in the park.
     -- Truss tops 1224; the high line's girders bottom out at 1296; its truss
     -- top at 1624 stays under the sky ceiling at 1720.
+    --
+    -- No line ends in a building. Where a line crosses a wall it passes over
+    -- a low station house standing in a gap in the frontage, then runs on
+    -- down an open street through the back row and the skyline, `reach`
+    -- (11000) past the wall: beyond the furthest tower, in the haze. Its
+    -- trains come in from out there and go back out there, on two tracks,
+    -- one each way.
     viaducts = {
         -- Slow enough to watch: 600 units/s (about 30 mph) puts a train over
         -- the park for 7-8 seconds, and one comes along on some line every
-        -- 10 seconds or so. Each run is shorter than its period, so a line
-        -- never has two trains on it.
+        -- 10 seconds or so, each way in turn.
         -- Each line runs both ways: `ends` names the terminus past each end
         -- (`to` is where +1 trains go, `from` where -1 trains go), and the
         -- trains' boards and the station signs all read from it.
         { name = "line1", axis = "y", at = 1685, from = -1792, to = 768, deck = 1000,
-          period = 24, offset = 0, cars = 3, speed = 600, runout = 800,
+          period = 24, offset = 0, cars = 3, speed = 600, reach = 11000,
           label = "1", color = { 220, 40, 40 }, ends = { to = "SPOONER ST", from = "QUAHOG HARBOR" } },
         { name = "line2", axis = "y", at = 2665, from = -1792, to = 768, deck = 1000,
-          period = 29, offset = 9, cars = 4, speed = 600, runout = 800,
+          period = 29, offset = 9, cars = 4, speed = 600, reach = 11000,
           label = "2", color = { 30, 120, 220 }, ends = { to = "TOY FACTORY", from = "JAMES WOODS HIGH" } },
         { name = "line3", axis = "x", at = -300, from = -256, to = 3584, deck = 1400,
-          period = 35, offset = 17, cars = 4, speed = 700, runout = 800,
+          period = 35, offset = 17, cars = 4, speed = 700, reach = 11000,
           label = "3", color = { 30, 160, 70 }, ends = { to = "DOWNTOWN", from = "PAWTUCKET BREWERY" } },
     },
+    -- the station houses under the lines: this deep, from the wall out
+    stationDepth = 512,
+    wallTop = 528,
 
     -- Piers under the crossings, in clear lanes (tests/test_city.lua proves
     -- the clearance against every ramp). Each carries the low line on its cap
@@ -138,26 +147,23 @@ BMX.City.Maps.gm_skatepark = {
           picPitch = 18, picBg = { 90, 70, 40 },
           pos = { 2112, 758, 660 }, normal = { 0, -1, 0 }, w = 620, h = 250 },
         { look = "street", text = "SPOONER ST", sub = "31",
-          pos = { 2200, 762, 300 }, normal = { 0, -1, 0 }, w = 320, h = 72 },
-        -- the metro: a station sign by each portal of each line (`metro`
-        -- names the line). Both portals' signs read the same, one row per
-        -- direction: NORTHBOUND -> where northbound trains go, and so on.
-        -- Every sign stands clear of its viaduct, its portal and the trains by
-        -- 32+ units (tests/test_signs.lua): lines 1 and 2 above the portal's
-        -- lintel (frame top z 1288; the sign's bottom 1344), line 3 -- whose
-        -- portal runs up to z 1688 -- beside it, past the frame's jamb.
+          pos = { 2200, 762, 340 }, normal = { 0, -1, 0 }, w = 320, h = 72 },
+        -- the metro: a station sign on the front of each station house, over
+        -- its entrance, under the line (`metro` names the line). Both of a
+        -- line's signs read the same, one row per direction: NORTHBOUND ->
+        -- where northbound trains go, and so on.
         { look = "transit", metro = "line1", sub = "Quahog Metro",
-          pos = { 1685, 758, 1440 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+          pos = { 1685, 758, 420 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line1", sub = "Quahog Metro",
-          pos = { 1685, -1782, 1440 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+          pos = { 1685, -1782, 420 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line2", sub = "Quahog Metro",
-          pos = { 2665, 758, 1440 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+          pos = { 2665, 758, 420 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line2", sub = "Quahog Metro",
-          pos = { 2665, -1782, 1440 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+          pos = { 2665, -1782, 420 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line3", sub = "Quahog Metro",
-          pos = { -246, 250, 1480 }, normal = { 1, 0, 0 }, w = 640, h = 150 },
+          pos = { -246, -300, 420 }, normal = { 1, 0, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line3", sub = "Quahog Metro",
-          pos = { 3574, -850, 1480 }, normal = { -1, 0, 0 }, w = 640, h = 150 },
+          pos = { 3574, -300, 420 }, normal = { -1, 0, 0 }, w = 640, h = 150 },
         -- west wall
         { look = "ad", style = "minimal", text = "Goldman's", sub = "Feeling sick? Try feeling better.",
           fine = "Mort Goldman, pharmacist. Not a doctor.", burst = "PHARMACY", bg = { 22, 40, 34 }, band = { 0, 210, 140 },
@@ -172,7 +178,7 @@ BMX.City.Maps.gm_skatepark = {
           picPitch = 22, picBg = { 60, 40, 30 },
           pos = { -248, -1350, 620 }, normal = { 1, 0, 0 }, w = 620, h = 240 },
         { look = "street", text = "SPOONER ST", sub = "",
-          pos = { -250, -1000, 300 }, normal = { 1, 0, 0 }, w = 320, h = 72 },
+          pos = { -250, -1000, 340 }, normal = { 1, 0, 0 }, w = 320, h = 72 },
         -- east wall
         { look = "ad", style = "tv", text = "QUAHOG 5 NEWS", sub = "Local man rides bike. Film at 11.", burst = "LIVE",
           fine = "TOM TUCKER: USUALLY RIGHT, ALWAYS CONFIDENT", bg = { 30, 50, 110 }, bg2 = { 8, 12, 40 }, band = { 14, 40, 120 },
@@ -222,6 +228,52 @@ BMX.City.Maps.gm_skatepark = {
           fine = "*Bust of our founder. Resemblance to James Woods not guaranteed.",
           bg = { 255, 90, 90 }, bg2 = { 150, 10, 40 }, fg = { 255, 255, 255 }, band = { 60, 0, 20 }, burstColor = { 255, 210, 0 },
           pic = { { model = "models/props_combine/breenbust.mdl", ang = { 0, -22, 0 } } }, picPitch = 6, picBg = { 90, 40, 45 } },
+    },
+
+    -- The street floor is shops (sh_city.lua, B:storefronts): every frontage
+    -- building's front, over the park's wall, is false shop fronts, in this
+    -- order round the park (north, south, west, east; each wall west to east
+    -- or south to north), and the station houses are the metro's entrances.
+    -- Quahog's own: the town's shops and the family's, nothing edgier.
+    -- `kind` picks what is in the window (cl_city.lua SHOP_WINDOWS); `awning`
+    -- its colour (City.AwningColours), stripes with `awning2` or cream.
+    --
+    -- No awning where a ramp stands against the wall (each ramp's measured
+    -- footprint, tests/test_city.lua, 40 units of air): a rider going up a
+    -- quarterpipe must not ride through canvas.
+    storefronts = {
+        station = { text = "QUAHOG METRO", sub = "Trains every few minutes", kind = "metro",
+                    bg = { 36, 38, 42 }, fg = { 255, 255, 255 } },
+        noAwning = {
+            { side = "north", from = -256, to = 1471 },     -- flat ramp, both quarterpipes
+            { side = "south", from = -256, to = 195 },      -- the spine in the corner
+            { side = "south", from = 519, to = 953 },       -- the flat ramp
+            { side = "south", from = 2358, to = 2984 },     -- the funbox
+            { side = "west", from = -1792, to = -1168 },    -- the spine
+            { side = "east", from = -1727, to = -1027 },    -- the quarterpipe
+        },
+        shops = {
+            { text = "GOLDMAN'S PHARMACY", kind = "pharmacy", bg = { 22, 70, 54 }, fg = { 240, 240, 228 }, awning = "green" },
+            { text = "SPOONER ST BIKES", kind = "bikes", bg = { 196, 78, 22 }, fg = { 255, 255, 255 }, awning = "navy" },
+            { text = "QUAHOG BAKERY", kind = "bakery", bg = { 240, 226, 196 }, fg = { 120, 60, 30 }, awning = "brown" },
+            { text = "BRIAN'S BOOKS", kind = "books", bg = { 30, 40, 70 }, fg = { 232, 204, 128 }, awning = "red" },
+            { text = "CLEVELAND'S DELI", kind = "deli", bg = { 150, 30, 30 }, fg = { 255, 240, 200 }, awning = "gold" },
+            { text = "QUAHOG FLOWERS", kind = "flowers", bg = { 245, 230, 235 }, fg = { 170, 40, 90 }, awning = "green", awning2 = "gold" },
+            { text = "PAWTUCKET RECORDS", kind = "records", bg = { 20, 20, 24 }, fg = { 255, 200, 60 }, awning = "red" },
+            { text = "HAPPY-GO-LUCKY TOYS", kind = "toys", bg = { 255, 150, 220 }, fg = { 80, 20, 120 }, awning = "blue", awning2 = "gold" },
+            { text = "THE CLAM SHACK", kind = "diner", bg = { 30, 110, 150 }, fg = { 255, 255, 255 }, awning = "red" },
+            { text = "QUAHOG HARDWARE", kind = "hardware", bg = { 200, 40, 30 }, fg = { 255, 255, 255 }, awning = "navy" },
+            { text = "MEG'S CUPCAKES", kind = "bakery", bg = { 255, 214, 226 }, fg = { 150, 40, 80 }, awning = "red" },
+            { text = "QUAHOG BARBERS", kind = "barber", bg = { 240, 240, 240 }, fg = { 30, 50, 120 }, awning = "blue" },
+            { text = "SUDS LAUNDROMAT", kind = "laundry", bg = { 60, 150, 200 }, fg = { 255, 255, 255 }, awning = "navy" },
+            { text = "PEWTERSCHMIDT SAVINGS", kind = "bank", bg = { 28, 30, 40 }, fg = { 220, 186, 100 } },
+            { text = "QUAHOG COFFEE CO.", kind = "coffee", bg = { 70, 44, 30 }, fg = { 240, 220, 190 }, awning = "brown", awning2 = "cream" },
+            { text = "BIG PETE'S PIZZA", kind = "pizza", bg = { 30, 110, 50 }, fg = { 255, 255, 255 }, awning = "red", awning2 = "cream" },
+            { text = "PETORIA GIFTS", kind = "souvenir", bg = { 30, 150, 230 }, fg = { 255, 230, 60 }, awning = "gold" },
+            { text = "QUAHOG CANDY", kind = "candy", bg = { 255, 240, 120 }, fg = { 220, 30, 90 }, awning = "red" },
+            { text = "LOIS'S PIANO LESSONS", kind = "music", bg = { 60, 30, 60 }, fg = { 245, 225, 240 }, awning = "navy" },
+            { text = "QUAHOG POST OFFICE", kind = "post", bg = { 24, 50, 110 }, fg = { 255, 255, 255 }, awning = "blue" },
+        },
     },
 
     -- Greenery (sh_city.lua, B:greenery). The beds stand on the park floor
