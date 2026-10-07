@@ -19,6 +19,7 @@ walls to z 528, sky to z 1720). Every brush is our own; no other map's content.
 | `lua/entities/bmx_city_solid/` | The city's colliders (viaducts, piers, planting beds). |
 | `tools/city/` | Offline preview of the city layout. |
 | `tests/` | The city's tests, run on the BMX addon's offline harness. |
+| `maps/petopia_bmx_fall.nav` | the navmesh: 360 areas, made by the BMX addon's `bmx_nav_build` (rebuild it after any change to the BSP) |
 
 ## The three pieces
 
