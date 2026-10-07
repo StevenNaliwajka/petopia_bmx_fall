@@ -21,6 +21,17 @@ walls to z 528, sky to z 1720). Every brush is our own; no other map's content.
 | `tests/` | The city's tests, run on the BMX addon's offline harness. |
 | `maps/petopia_bmx_fall.nav` | the navmesh: 360 areas, made by the BMX addon's `bmx_nav_build` (rebuild it after any change to the BSP) |
 
+## Official server
+
+**Petopia**, Peter Griffin's Garry's Mod server, is the official BMX server:
+
+    connect gmod.naliwajka.com:27015
+
+Paste that into the Garry's Mod console (~), or find "Petopia" in the server
+browser. Type `/vote bmx` in chat to switch it to BMX.
+
+Found a bug or have an idea? [Open an issue on GitHub](https://github.com/StevenNaliwajka/petopia_bmx_fall/issues).
+
 ## The three pieces
 
 | Piece | Repository | What it is |
