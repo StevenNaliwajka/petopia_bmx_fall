@@ -10416,7 +10416,7 @@ entity
 	"angles" "0 0 0"
 	"pitch" "-28"
 	"_light" "255 206 150 200"
-	"_ambient" "200 212 255 175"
+	"_ambient" "218 212 226 170"
 	"_lightHDR" "-1 -1 -1 1"
 	"_ambientHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"

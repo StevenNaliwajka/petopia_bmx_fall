@@ -42,7 +42,7 @@ SKYNAME = "sky_day02_09"
 
 # The light (see entities()). "r g b brightness".
 SUN = "255 206 150 200"          # warm, low, moderate
-SKY = "200 212 255 175"          # cool sky fill: lights the shade
+SKY = "218 212 226 170"          # sky fill, a touch cool: lights the shade without greying the wood
 LAMP = "255 186 112 260"         # the street lamps, as the city draws them
 LAMP_HALF, LAMP_ZERO = 260, 640  # their falloff, units
 # Fill in the west wall's shadow. The sunlit park floor and the city's sunlit
