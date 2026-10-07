@@ -134,7 +134,8 @@ T.test("routes: every line spans the park wall to wall, with a named terminus pa
                     atEnd[e] = atEnd[e] + 1
                     T.ok(inward == (e == l.from and 1 or -1), l.name .. " sign faces the park")
                 end
-                T.ok(math.abs(across - l.at) <= 500, l.name .. " sign by its portal")
+                -- over the portal or beside it: its near edge within 300 of the line
+                T.ok(math.abs(across - l.at) - (s.fw or s.w) / 2 <= 300, l.name .. " sign by its portal")
             end
         end
         T.eq(atEnd[l.from], 1, l.name .. " one sign at the " .. l.from .. " end")

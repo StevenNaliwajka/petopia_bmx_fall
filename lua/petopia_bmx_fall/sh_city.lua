@@ -229,7 +229,7 @@ City.Builder = B      -- for the tests (tests/test_signs.lua turns the window bl
 
 local function newBuilder(def)
     local b = setmetatable({ def = def, faces = {}, solids = {}, lines = {}, signs = {},
-                             buildings = {}, props = {}, lamps = {}, quads = 0 }, B)
+                             buildings = {}, props = {}, lamps = {}, quads = 0, portals = {} }, B)
     local v = def.view or def.park
     b.view = { v[1], v[2], v[3], v[4], v[5], v[6] }
     -- The sun, from the map's light_environment: shading is baked into vertex
@@ -702,6 +702,8 @@ function B:viaduct(v, name)
             local fa, fb = face, face + dir * fr
             local bx0, by0, bz0, bx1, by1, bz1 = lineBox(v, math.min(fa, fb), math.max(fa, fb), ca, cb, za, zb)
             self:box(bx0, by0, bz0, bx1, by1, bz1, { side = "concrete2", top = "concrete2", bottom = "concrete2" }, 0.9)
+            -- kept for the tests: no sign may touch a portal (tests/test_signs.lua)
+            self.portals[#self.portals + 1] = { line = name, box = { bx0, by0, bz0, bx1, by1, bz1 } }
         end
         frame(-W / 2 - fr, W / 2 + fr, ph1, ph1 + fr)
         frame(-W / 2 - fr, -W / 2, ph0 - fr, ph1)
@@ -1599,6 +1601,7 @@ function City.Build(def)
     return {
         faces = b.faces, solids = b.solids, lines = b.lines, signs = b.signs,
         buildings = b.buildings, props = b.props, lamps = b.lamps, quads = b.quads, rows = b.rows, def = def,
+        portals = b.portals,
         mood = def.mood,
     }
 end

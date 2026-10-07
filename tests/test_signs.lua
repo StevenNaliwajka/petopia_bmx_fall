@@ -298,3 +298,97 @@ T.test("signs: tools/city/export.lua writes every sign (station signs have no te
     for _ in out:match('"signs":(%b[])'):gmatch('"text":') do n = n + 1 end
     T.eq(n, #L.signs, "every sign exported")
 end)
+
+-- Everything of a line a sign must keep clear of, as boxes { name, {x0,y0,z0,x1,y1,z1} }:
+-- its colliders, the whole viaduct (deck, girders, rails, truss, bracing), each
+-- portal with its frame, and the volume every train model sweeps along it.
+local function lineParts(City, L)
+    local V = City.Viaduct
+    local parts = {}
+    local function lineBox(l, a0, a1, c0, c1, z0, z1)
+        if l.axis == "y" then return { l.at + c0, a0, z0, l.at + c1, a1, z1 } end
+        return { a0, l.at + c0, z0, a1, l.at + c1, z1 }
+    end
+    for _, so in ipairs(L.solids) do
+        if so.name:find("^line") then
+            for _, b in ipairs(so.boxes) do parts[#parts + 1] = { so.name .. " collider", b } end
+        end
+    end
+    for _, l in ipairs(L.lines) do
+        local hw = V.width / 2
+        parts[#parts + 1] = { l.name .. " viaduct", lineBox(l, l.from, l.to, -hw, hw, l.deck - V.slab - V.girder, l.deck + V.truss + 16) }
+        for _, M in ipairs(City.TrainModels or { { w = 136, h = 205, len = 650 } }) do
+            local w = math.max(M.w, 1) / 2
+            local reach = l.runout + l.cars * ((M.len or 650) + 14)
+            parts[#parts + 1] = { l.name .. " train " .. tostring(M.model), lineBox(l, l.from - reach, l.to + reach, -w, w,
+                l.deck + V.rail, l.deck + V.rail + M.h) }
+        end
+    end
+    -- each portal: its frame pieces, and the opening they surround
+    local ends = {}
+    for _, p in ipairs(L.portals or {}) do
+        parts[#parts + 1] = { p.line .. " portal frame", p.box }
+        local k = p.line .. ":" .. math.floor((p.box[2] + p.box[5]) / 2 / 400) .. ":" .. math.floor((p.box[1] + p.box[4]) / 2 / 400)
+        local u = ends[k]
+        if not u then ends[k] = { p.box[1], p.box[2], p.box[3], p.box[4], p.box[5], p.box[6] }
+        else for a = 1, 3 do u[a] = math.min(u[a], p.box[a]) u[a + 3] = math.max(u[a + 3], p.box[a + 3]) end end
+    end
+    for k, u in pairs(ends) do parts[#parts + 1] = { k .. " portal", u } end
+    return parts
+end
+
+-- a station sign's whole volume: its case (face to wall) and, for a hung
+-- sign, its hangers
+local function signBox(s)
+    local b = s.case
+    return { b[1], b[2], b[3], b[4], b[5], math.max(b[6], s.hang or b[6]) }
+end
+
+City_SIGN_TRACK_MARGIN = 32
+
+local function trackClashes(City, L)
+    local parts = lineParts(City, L)
+    local M = City_SIGN_TRACK_MARGIN
+    local out = {}
+    for _, s in ipairs(L.signs) do
+        if s.look == "transit" or s.metro then
+            local a = signBox(s)
+            for _, p in ipairs(parts) do
+                local b = p[2]
+                if a[1] < b[4] + M and a[4] > b[1] - M and a[2] < b[5] + M and a[5] > b[2] - M and a[3] < b[6] + M and a[6] > b[3] - M then
+                    out[#out + 1] = string.format("%s sign at (%.0f,%.0f,%.0f) within %d of %s", tostring(s.metro or s.text),
+                        s.face[1], s.face[2], s.face[3], M, p[1])
+                end
+            end
+        end
+    end
+    return out, parts
+end
+
+T.test("station signs: clear of the tracks, viaduct, portals and every train's path, by a margin", function()
+    local City, L = city()
+    local hits, parts = trackClashes(City, L)
+    T.ok(#parts > 20, "parts to keep clear of: " .. #parts)
+    T.ok(#L.portals >= 24, "every portal's frame is in the layout: " .. #L.portals)
+    local n = 0
+    for _, s in ipairs(L.signs) do if s.look == "transit" or s.metro then n = n + 1 end end
+    T.ok(n >= 6, "station signs: " .. n)
+    T.eq(#hits, 0, "signs clashing with a line: " .. table.concat(hits, "; "))
+end)
+
+T.test("station signs: each still reads as its line's, by its own portal", function()
+    local City, L = city()
+    for _, s in ipairs(L.signs) do
+        if s.metro then
+            local l
+            for _, x in ipairs(L.lines) do if x.name == s.metro then l = x end end
+            T.ok(l, s.metro .. " is a line")
+            -- on the end wall the line runs into, near its portal
+            local along = l.axis == "y" and s.face[2] or s.face[1]
+            local across = l.axis == "y" and s.face[1] or s.face[2]
+            T.ok(math.abs(along - l.from) < 40 or math.abs(along - l.to) < 40, s.metro .. " on an end wall")
+            local dz = s.face[3] - l.deck
+            T.ok(math.abs(across - l.at) + math.max(0, math.abs(dz) - 400) <= 700, s.metro .. " sign within sight of its portal")
+        end
+    end
+end)

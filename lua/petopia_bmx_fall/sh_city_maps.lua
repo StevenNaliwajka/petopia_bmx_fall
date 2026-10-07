@@ -139,21 +139,25 @@ BMX.City.Maps.gm_skatepark = {
           pos = { 2112, 758, 660 }, normal = { 0, -1, 0 }, w = 620, h = 250 },
         { look = "street", text = "SPOONER ST", sub = "31",
           pos = { 2200, 762, 300 }, normal = { 0, -1, 0 }, w = 320, h = 72 },
-        -- the metro: a station sign over each portal of each line (`metro`
+        -- the metro: a station sign by each portal of each line (`metro`
         -- names the line). Both portals' signs read the same, one row per
         -- direction: NORTHBOUND -> where northbound trains go, and so on.
+        -- Every sign stands clear of its viaduct, its portal and the trains by
+        -- 32+ units (tests/test_signs.lua): lines 1 and 2 above the portal's
+        -- lintel (frame top z 1288; the sign's bottom 1344), line 3 -- whose
+        -- portal runs up to z 1688 -- beside it, past the frame's jamb.
         { look = "transit", metro = "line1", sub = "Quahog Metro",
-          pos = { 1685, 758, 1350 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+          pos = { 1685, 758, 1440 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line1", sub = "Quahog Metro",
-          pos = { 1685, -1782, 1350 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+          pos = { 1685, -1782, 1440 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line2", sub = "Quahog Metro",
-          pos = { 2665, 758, 1350 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+          pos = { 2665, 758, 1440 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line2", sub = "Quahog Metro",
-          pos = { 2665, -1782, 1350 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+          pos = { 2665, -1782, 1440 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line3", sub = "Quahog Metro",
-          pos = { -246, 100, 1480 }, normal = { 1, 0, 0 }, w = 640, h = 150 },
+          pos = { -246, 250, 1480 }, normal = { 1, 0, 0 }, w = 640, h = 150 },
         { look = "transit", metro = "line3", sub = "Quahog Metro",
-          pos = { 3574, -800, 1480 }, normal = { -1, 0, 0 }, w = 640, h = 150 },
+          pos = { 3574, -850, 1480 }, normal = { -1, 0, 0 }, w = 640, h = 150 },
         -- west wall
         { look = "ad", style = "minimal", text = "Goldman's", sub = "Feeling sick? Try feeling better.",
           fine = "Mort Goldman, pharmacist. Not a doctor.", burst = "PHARMACY", bg = { 22, 40, 34 }, band = { 0, 210, 140 },
