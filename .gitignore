@@ -1,0 +1,4 @@
+mapsrc/.build/
+mapsrc/build.log
+*.prt
+*.lin
