@@ -717,7 +717,47 @@ function B:viaduct(v, name)
         name = name, axis = v.axis, at = v.at, from = a0, to = a1, deck = deck,
         period = v.period or 45, offset = v.offset or 0, cars = v.cars or 3,
         speed = v.speed or 1100, runout = v.runout or 1600,
+        label = v.label, color = v.color, ends = v.ends,
     }
+end
+
+--------------------------------------------------------------------------
+-- Where a line goes. A line runs both ways over the park: +1 from its `from`
+-- end to its `to` end, -1 back. `ends = { from = "...", to = "..." }` names the
+-- terminus beyond each end, so a train's destination is the end it is heading
+-- for, and the same direction of travel always goes to the same place: on the
+-- train's front board, its rear board, and the station sign at either portal.
+--------------------------------------------------------------------------
+local BOUND = { y = { [1] = "NORTHBOUND", [-1] = "SOUTHBOUND" },
+                x = { [1] = "EASTBOUND", [-1] = "WESTBOUND" } }
+
+-- The terminus a train going `dir` on line `l` is heading for.
+function City.LineDest(l, dir)
+    local e = l.ends or {}
+    if dir > 0 then return e.to or "" end
+    return e.from or ""
+end
+
+-- The compass way a train going `dir` travels ("NORTHBOUND", ...): +y is north
+-- and +x east in the map's frame.
+function City.LineBound(l, dir)
+    return BOUND[l.axis][dir > 0 and 1 or -1]
+end
+
+-- A station sign's rows: one per direction, in a fixed order (+1 first), so
+-- the sign over either portal of a line reads exactly the same.
+function City.TransitRows(l)
+    return {
+        { dir = 1, bound = City.LineBound(l, 1), dest = City.LineDest(l, 1) },
+        { dir = -1, bound = City.LineBound(l, -1), dest = City.LineDest(l, -1) },
+    }
+end
+
+-- The line a transit sign belongs to (its `metro` field names it).
+function City.SignLine(layout, s)
+    for _, l in ipairs(layout and layout.lines or {}) do
+        if l.name == s.metro then return l end
+    end
 end
 
 -- A pier: a concrete column from the park floor to the underside of a

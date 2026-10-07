@@ -34,8 +34,19 @@ local cvTrains = CreateClientConVar("bmx_city_trains", "1", true, false, "BMX: r
 local cvSigns = CreateClientConVar("bmx_city_signs", "1", true, false, "BMX: draw the city's signs (1/0)")
 local cvPlants = CreateClientConVar("bmx_city_plants", "1", true, false, "BMX: draw the city's trees, shrubs and roof gardens (1/0)")
 
-City.TrainModel = "models/props_trainstation/train_outro_car01.mdl"
-City.TrainCar = { length = 650, gap = 14, lift = 104 }   -- lift: the model's floor is 104 below its origin
+-- A car is a slot `length` long on the timetable; the model drawn in it is the
+-- first of City.TrainModels this client has. Each model's hull was read out of
+-- the MDL header (2026-10-07): `lift` is how far its floor sits below its
+-- origin, `w`/`h`/`len` its size at `scale`, so the truss test can check it.
+-- train_outro_car01 ships in the content_hl2 VPKs, which not every client has;
+-- train001 is in hl2_misc, which every GMod has.
+City.TrainCar = { length = 650, gap = 14, lift = 104 }
+City.TrainModels = {
+    { model = "models/props_trainstation/train_outro_car01.mdl", scale = 1, lift = 104.2, w = 136, h = 205, len = 649 },
+    { model = "models/props_trainstation/train001.mdl", scale = 0.94, lift = 113.8 * 0.94,
+      w = 159.4 * 0.94, h = 227.3 * 0.94, len = 685 * 0.94 },
+}
+City.TrainModel = City.TrainModels[1].model
 City.TrainSound = "sound/ambient/machines/train_wheels_overhead_loop1.wav"
 City.TrainHorn = "ambient/alarms/train_horn_distant1.wav"
 
@@ -202,13 +213,15 @@ function City.TrainAt(l, t)
     return { head = head, dir = dir, cycle = cycle, train = train, run = run, phase = phase }
 end
 
--- The world position and yaw of car `i` (1 = lead) of a train at `st`.
-function City.CarPos(l, st, i)
+-- The world position and yaw of car `i` (1 = lead) of a train at `st`. z is
+-- the model's origin for a model whose floor is `lift` below it (default: the
+-- slot's, City.TrainCar.lift).
+function City.CarPos(l, st, i, lift)
     local C = City.TrainCar
     local back = (i - 0.5) * C.length + (i - 1) * C.gap
     local d = st.head - back                             -- distance from the start end
     local a = st.dir > 0 and (l.from + d) or (l.to - d)
-    local z = l.deck + City.Viaduct.rail + C.lift
+    local z = l.deck + City.Viaduct.rail + (lift or C.lift)
     -- train_outro_car01 is long along its own y axis (-322..327, measured on
     -- the server): yaw 0 lays it along world y, yaw 90 along world x. It
     -- faces the way it is going.
@@ -216,21 +229,99 @@ function City.CarPos(l, st, i)
     return a, l.at, z, st.dir > 0 and -90 or 90
 end
 
+-- A point `a` along line `l` (a = world coordinate on its axis) at height z.
+local function linePoint(l, a, z)
+    if l.axis == "y" then return l.at, a, z end
+    return a, l.at, z
+end
+
+-- Where a train at `st` is heard, and how loud: the wheels' rumble rides the
+-- train. It comes from the stretch of the train that is out over the park
+-- (the middle of it, or the end of it still in the portal while it comes out
+-- or goes in), so it slides along with the cars; out of the portals it fades
+-- out over `fade` units, so it starts as the train comes out and stops as it
+-- goes in. Pure, for the tests: { x, y, z, vol, a }.
+City.TrainFade = 400
+function City.TrainSoundAt(l, st)
+    if not st then return nil end
+    local len = l.to - l.from
+    -- the train's span in "distance from the start end" terms
+    local head, tail = st.head, st.head - st.train
+    local mid = (head + tail) / 2
+    local d, gap
+    if head < 0 then
+        d, gap = head, -head                       -- not out yet: its nose is `gap` short
+    elseif tail > len then
+        d, gap = tail, tail - len                  -- gone in: its tail is `gap` past
+    else
+        d, gap = math.min(math.max(mid, math.max(tail, 0)), math.min(head, len)), 0
+    end
+    local vol = math.max(0, 1 - gap / City.TrainFade)
+    local a = st.dir > 0 and (l.from + d) or (l.to - d)
+    local x, y, z = linePoint(l, a, l.deck + City.Viaduct.rail + 100)
+    return { x = x, y = y, z = z, vol = vol, a = a }
+end
+
+-- The horn sounds once a run, as the nose comes out of the portal: true while
+-- the head is within `window` of the portal mouth. A client that joins mid-run
+-- does not hear a horn for a train already halfway across.
+City.HornWindow = 300
+function City.TrainHornDue(l, st)
+    return st ~= nil and st.head > -City.HornWindow and st.head < City.HornWindow
+end
+
+-- The destination boards on a train at `st`: one on the lead car's nose, one
+-- on the last car's tail, both showing where the train is going. Each is
+-- { x, y, z, nx, ny, dest, label, color, front }, n pointing out of the end.
+function City.TrainBoards(l, st)
+    local C = City.TrainCar
+    local half = C.length / 2 + 3
+    local dest = City.LineDest(l, st.dir)
+    local out = {}
+    for _, e in ipairs({ { 1, 1 }, { l.cars, -1 } }) do
+        local i, outward = e[1], e[2]
+        local x, y = City.CarPos(l, st, i)
+        local s = st.dir * outward          -- along the axis, +1 = toward `to`
+        local nx, ny = 0, 0
+        if l.axis == "y" then ny = s y = y + s * half else nx = s x = x + s * half end
+        out[#out + 1] = { x = x, y = y, z = l.deck + City.Viaduct.rail + 182, nx = nx, ny = ny,
+                          dest = dest, label = l.label or "", color = l.color, front = outward > 0 }
+    end
+    return out
+end
+
+-- The car model this client can draw, with its fit, or nil if none. Asks the
+-- filesystem first: util.IsValidModel is false on a client for any model not
+-- precached yet (it was, at first, for every train, so no train was ever
+-- drawn while its rumble played on its own).
+function City.PickTrainModel()
+    for _, M in ipairs(City.TrainModels) do
+        if (file and file.Exists and file.Exists(M.model, "GAME"))
+            or (util.IsValidModel and util.IsValidModel(M.model)) then
+            return M
+        end
+    end
+end
+
 City._cars = City._cars or {}
 local function carModel(i)
     local m = City._cars[i]
-    if IsValid(m) then return m end
-    if util.IsValidModel and not util.IsValidModel(City.TrainModel) then return nil end
-    m = ClientsideModel(City.TrainModel, RENDERGROUP_OPAQUE)
+    if IsValid(m) then return m, City._carSpec end
+    local M = City._carSpec or City.PickTrainModel()
+    if not M then return nil end
+    City._carSpec = M
+    m = ClientsideModel(M.model, RENDERGROUP_OPAQUE)
     if not IsValid(m) then return nil end
     m:SetNoDraw(true)
+    if M.scale ~= 1 and m.SetModelScale then m:SetModelScale(M.scale, 0) end
     City._cars[i] = m
-    return m
+    return m, M
 end
 
--- One looping wheel-rumble channel per line, moved with the train.
+-- One looping wheel-rumble channel per line, moved with the train and set to
+-- its loudness every frame; stopped when the train is gone.
 City._sounds = City._sounds or {}
-local function lineSound(name, pos, on)
+local function lineSound(name, pos, on, vol)
     local s = City._sounds[name]
     if not on then
         if s and s.ch and s.ch:IsValid() then s.ch:Stop() end
@@ -247,18 +338,22 @@ local function lineSound(name, pos, on)
                 s.ch = ch
                 ch:EnableLooping(true)
                 ch:Set3DFadeDistance(900, 0)
-                ch:SetVolume(1)
+                ch:SetVolume(s.vol or 0)
                 ch:SetPos(s.pos or pos)
                 ch:Play()
             end)
         end
     end
-    s.pos = pos
-    if s.ch and s.ch:IsValid() then s.ch:SetPos(pos) end
+    s.pos, s.vol = pos, vol or 1
+    if s.ch and s.ch:IsValid() then s.ch:SetPos(pos) s.ch:SetVolume(s.vol) end
 end
 
+-- Draw every line's train at time t, and keep its sound with it. A train that
+-- is not drawn (no car model on this client) makes no sound either.
+City._trainBoards = {}
 local function drawTrains(layout, t)
     local used = 0
+    local boards = {}
     render.SuppressEngineLighting(true)
     -- a fixed light: the cars spend half their run outside the map, where the
     -- engine has no lighting to give them, and should not go black there
@@ -267,34 +362,37 @@ local function drawTrains(layout, t)
     render.SetModelLighting(BOX_BACK, 0.9, 0.88, 0.8)
     for _, l in ipairs(layout.lines) do
         local st = City.TrainAt(l, t)
+        local drawn = false
         if st then
             for i = 1, l.cars do
-                local x, y, z, yaw = City.CarPos(l, st, i)
                 used = used + 1
-                local m = carModel(used)
+                local m, M = carModel(used)
                 if m then
+                    local x, y, z, yaw = City.CarPos(l, st, i, M.lift)
                     m:SetPos(Vector(x, y, z))
                     m:SetAngles(Angle(0, yaw, 0))
                     m:SetupBones()
                     m:DrawModel()
-                end
-                if i == 1 then
-                    -- the sound rides the middle of the train
-                    local mx, my, mz = City.CarPos(l, st, math.ceil(l.cars / 2))
-                    lineSound(l.name, Vector(mx, my, mz), true)
+                    drawn = true
                 end
             end
-            -- the horn, once, as it comes out of the portal
-            if l._horn ~= st.cycle and st.head > -300 then
+        end
+        if drawn then
+            local snd = City.TrainSoundAt(l, st)
+            lineSound(l.name, Vector(snd.x, snd.y, snd.z), true, snd.vol)
+            -- the horn, once a run, as the nose comes out of the portal
+            if l._horn ~= st.cycle and City.TrainHornDue(l, st) then
                 l._horn = st.cycle
                 local hx, hy, hz = City.CarPos(l, st, 1)
                 if sound and sound.Play then sound.Play(City.TrainHorn, Vector(hx, hy, hz), 95, 100, 0.6) end
             end
+            for _, b in ipairs(City.TrainBoards(l, st)) do boards[#boards + 1] = b end
         else
             lineSound(l.name, nil, false)
         end
     end
     render.SuppressEngineLighting(false)
+    City._trainBoards = boards
 end
 
 --------------------------------------------------------------------------
@@ -1014,20 +1112,92 @@ local function adSign(s, pw, ph)
     fn(s, pw, ph, s._pic)
 end
 
+-- The metro's own fonts, made once (kept apart from makeFonts above).
+local metroFonts = false
+local METRO_SIZES = { 64, 56, 48, 40, 34 }
+local function makeMetroFonts()
+    if metroFonts then return end
+    metroFonts = true
+    for _, sz in ipairs(METRO_SIZES) do
+        surface.CreateFont("BMXCityMetro" .. sz, { font = "Roboto", size = sz, weight = 800, antialias = true })
+    end
+    surface.CreateFont("BMXCityMetroBound", { font = "Roboto", size = 26, weight = 700, antialias = true })
+end
+
+-- A line's roundel: a coloured disc with the line's number in it.
+local function roundel(cx, cy, r, color, label, font)
+    draw.NoTexture()
+    surface.SetDrawColor(color)
+    surface.DrawPoly(disc(cx, cy, r))
+    draw.SimpleText(label, font, cx, cy, WHITE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+end
+
+-- A station sign: the line's roundel, then one row per direction of travel,
+-- "NORTHBOUND  SPOONER ST", in the same order on every sign of the line, so
+-- the signs at both portals say the same direction goes to the same place
+-- (City.TransitRows). A sign with no `metro` line keeps the old one-name look.
 local function transitSign(s, pw, ph)
-    local c = col(s.color, { 220, 40, 40 })
+    makeMetroFonts()
+    local l = City.SignLine(City._layout, s)
+    local c = col((l and l.color) or s.color, { 220, 40, 40 })
     surface.SetDrawColor(36, 38, 42, 255) surface.DrawRect(-pw / 2, -ph / 2, pw, ph)
     surface.SetDrawColor(200, 200, 200, 255) surface.DrawOutlinedRect(-pw / 2, -ph / 2, pw, ph, 4)
-    local r = ph * 0.36
-    local cx = -pw / 2 + ph * 0.5
-    draw.NoTexture()
-    surface.SetDrawColor(c)
-    local poly = {}
-    for i = 0, 23 do local a = i / 24 * math.pi * 2 poly[#poly + 1] = { x = cx + math.cos(a) * r, y = math.sin(a) * r } end
-    surface.DrawPoly(poly)
-    draw.SimpleText(s.line or "1", "BMXCityTransit", cx, 0, WHITE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    draw.SimpleText(s.text, "BMXCityTransit", cx + r + 24, -ph * 0.08, WHITE, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    if s.sub then draw.SimpleText(s.sub, "BMXCitySignSub", cx + r + 26, ph * 0.28, Color(190, 190, 190), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER) end
+    local r = ph * 0.32
+    local cx = -pw / 2 + ph * 0.46
+    roundel(cx, -ph * 0.06, r, c, (l and l.label) or s.line or "1", "BMXCityTransit")
+    if s.sub then draw.SimpleText(s.sub, "BMXCityMetroBound", cx, ph * 0.40, Color(190, 190, 190), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER) end
+    local x0 = cx + r + 26
+    if not l then
+        draw.SimpleText(s.text or "", "BMXCityTransit", x0, -ph * 0.08, WHITE, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        return
+    end
+    local rows = City.TransitRows(l)
+    local boundW = 0
+    surface.SetFont("BMXCityMetroBound")
+    for _, row in ipairs(rows) do boundW = math.max(boundW, (surface.GetTextSize(row.bound))) end
+    local xd = x0 + boundW + 18
+    local room = pw / 2 - 16 - xd
+    for i, row in ipairs(rows) do
+        local y = -ph / 2 + ph * (i - 0.5) / #rows
+        if i > 1 then
+            surface.SetDrawColor(90, 92, 98, 255)
+            surface.DrawRect(x0, -ph / 2 + ph * (i - 1) / #rows - 1, pw / 2 - 16 - x0, 2)
+        end
+        draw.SimpleText(row.bound, "BMXCityMetroBound", x0, y, Color(200, 200, 200), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        local font = fit("BMXCityMetro", METRO_SIZES, row.dest, room)
+        draw.SimpleText(row.dest, font, xd, y, WHITE, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    end
+end
+
+-- The destination boards on the trains' ends (City.TrainBoards): the line's
+-- roundel and where the train is going, the same on its nose and its tail.
+local BOARD_W, BOARD_H, BOARD_SCALE = 112, 28, 0.25
+local function drawTrainBoards(boards)
+    makeMetroFonts()
+    local eye = EyePos()
+    local pw, ph = BOARD_W / BOARD_SCALE, BOARD_H / BOARD_SCALE
+    for _, b in ipairs(boards or {}) do
+        local n = Vector(b.nx, b.ny, 0)
+        local p = Vector(b.x, b.y, b.z)
+        if (eye - p):Dot(n) > 0 then
+            local ang = n:Angle()
+            ang:RotateAroundAxis(ang:Up(), 90)
+            ang:RotateAroundAxis(ang:Forward(), 90)
+            cam.Start3D2D(p, ang, BOARD_SCALE)
+                local ok = pcall(function()
+                    surface.SetDrawColor(14, 14, 16, 255) surface.DrawRect(-pw / 2, -ph / 2, pw, ph)
+                    local r = ph * 0.36
+                    local cx = -pw / 2 + ph * 0.5
+                    roundel(cx, 0, r, col(b.color, { 220, 40, 40 }), b.label, "BMXCityMetro40")
+                    -- amber LED-style lettering, as on a real destination blind
+                    local room = pw / 2 - 12 - (cx + r + 14)
+                    draw.SimpleText(b.dest, fit("BMXCityMetro", METRO_SIZES, b.dest, room), cx + r + 14, 0,
+                        Color(255, 176, 40), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                end)
+            cam.End3D2D()
+            if not ok then break end
+        end
+    end
 end
 
 -- A US street sign: green, a white border, white capitals, a block number.
@@ -1235,6 +1405,7 @@ function City.Draw(bDepth, bSkybox, b3DSky)
     if cvPlants:GetBool() then City.Stats.plants = drawPlants(eye, fwd, cosH, sinH) end
     if cvTrains:GetBool() then
         drawTrains(L, CurTime())
+        if cvSigns:GetBool() then drawTrainBoards(City._trainBoards) end
     else
         for name in pairs(City._sounds) do lineSound(name, nil, false) end
     end
