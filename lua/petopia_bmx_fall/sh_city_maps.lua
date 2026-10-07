@@ -287,6 +287,20 @@ BMX.City.Maps.gm_skatepark = {
         },
     },
 
+    -- The bike rental: the BMX addon's free vending machines (bmx_rental), so
+    -- nobody needs the console or the Q menu to get a bike. Three in a row
+    -- beside the spawn nearest the middle of the park, (1707, -673), facing it
+    -- across open floor (yaw 180: their faces look west). x 1990 keeps their
+    -- backs 140+ off the flat ramp (x >= 2151), the row sits between the
+    -- spine (y <= -1327) and the funbox (y >= -290), and the bikes they hand
+    -- out appear between the machines and the spawn (sv_city.lua places
+    -- them; tests/test_rental.lua proves the clearances).
+    rental = {
+        { x = 1990, y = -770, yaw = 180 },
+        { x = 1990, y = -700, yaw = 180 },
+        { x = 1990, y = -630, yaw = 180 },
+    },
+
     -- Greenery (sh_city.lua, B:greenery). The beds stand on the park floor
     -- against the wall, each in a lane measured clear of every ramp by 40+
     -- units (tests/test_city.lua checks it against the live footprints):

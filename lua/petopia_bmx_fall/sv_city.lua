@@ -58,8 +58,37 @@ function City.PrecacheAdModels()
     end
 end
 
-hook.Add("InitPostEntity", "BMXCity", function() City.SpawnSolids() City.PrecacheAdModels() end)
-hook.Add("PostCleanupMap", "BMXCity", function() City.SpawnSolids() end)
+-- THE BIKE RENTAL: the map's bmx_rental machines (the BMX addon's free bike
+-- vending machine), where the map's `rental` table says. Placed whether or not
+-- bmx_city is on -- they are how a player gets a bike -- and only when the
+-- addon that has the machine is installed.
+function City.SpawnRental()
+    for _, e in ipairs(ents.FindByClass("bmx_rental")) do
+        if e.BMXCityRental then e:Remove() end
+    end
+    local def = City.Def()
+    if not (def and def.rental and scripted_ents.GetStored("bmx_rental")) then return 0 end
+    local n = 0
+    for _, r in ipairs(def.rental) do
+        local e = ents.Create("bmx_rental")
+        if IsValid(e) then
+            e.BMXCityRental = true
+            -- standing on the floor: the model's origin is its middle, so the
+            -- model goes on first and its bounds say how far up that is
+            e:SetModel(BMX.Rental.Model)
+            e:SetPos(Vector(r.x, r.y, def.park[3] - e:OBBMins().z))
+            e:SetAngles(Angle(0, r.yaw or 0, 0))
+            e:Spawn()
+            n = n + 1
+        end
+    end
+    return n
+end
+
+hook.Add("InitPostEntity", "BMXCity", function()
+    City.SpawnSolids() City.PrecacheAdModels() City.SpawnRental()
+end)
+hook.Add("PostCleanupMap", "BMXCity", function() City.SpawnSolids() City.SpawnRental() end)
 
 -- Nobody picks up a viaduct, a planting bed or a tree trunk: physgun,
 -- gravity gun (pick up or punt), toolgun and the context menu all refuse them.
