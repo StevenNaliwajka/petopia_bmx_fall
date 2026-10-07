@@ -351,3 +351,7 @@ BMX.City.Maps.gm_skatepark = {
 -- The same park, renamed for its autumn edition: the server runs a copy of
 -- gm_skatepark's BSP as petopia_bmx_fall (docs/CITY.md, "The map").
 BMX.City.Maps.petopia_bmx_fall = BMX.City.Maps.gm_skatepark
+-- The test server (test-gmod) runs the same BSP under its own name, so a
+-- player's downloaded copy of one never clashes with the other's ("your map
+-- differs from the server's"): tools/deploy-test.sh renames it on the way in.
+BMX.City.Maps.test_petopia_bmx_fall = BMX.City.Maps.gm_skatepark

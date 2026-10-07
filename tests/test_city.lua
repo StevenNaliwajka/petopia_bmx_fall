@@ -747,6 +747,22 @@ T.test("petopia_bmx_fall is gm_skatepark's city under the autumn map's name", fu
     T.ok(City.Maps.petopia_bmx_fall.mood and City.Maps.petopia_bmx_fall.mood.sky, "with its late-autumn mood")
 end)
 
+T.test("the test server's map, test_petopia_bmx_fall, is the same city under its own name, and is deployed as that", function()
+    local City = city()
+    T.ok(City.Maps.test_petopia_bmx_fall == City.Maps.gm_skatepark, "same definition")
+    -- tools/deploy-test.sh renames the BSP, its navmesh and its thumbnail, and
+    -- checks the server's systemd drop-in names the same map
+    local here = debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or "tests"
+    local f = assert(io.open(here .. "/../tools/deploy-test.sh", "r"))
+    local sh = f:read("*a")
+    f:close()
+    T.ok(sh:find("TEST=test_petopia_bmx_fall", 1, true), "deploys under the test name")
+    for _, part in ipairs({ "mv $NAME.bsp $TEST.bsp", "mv $NAME.nav $TEST.nav", "mv thumb/$NAME.png thumb/$TEST.png" }) do
+        T.ok(sh:find(part, 1, true), "renames: " .. part)
+    end
+    T.ok(sh:find("GMOD_MAP=$TEST", 1, true), "checks the server's map drop-in")
+end)
+
 T.test("trees and lamps are made even when util.IsValidModel says no (it does, client-side, before a precache)", function()
     local env = drawnClient()
     local City = env.BMX.City

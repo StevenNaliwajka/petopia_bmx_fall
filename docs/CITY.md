@@ -131,6 +131,15 @@ measured against, with our own brush ramps at the same footprints. The city
 table is still keyed by both names (`Maps.petopia_bmx_fall = Maps.gm_skatepark`),
 so gm_skatepark keeps its city too.
 
+**The test server runs it as `test_petopia_bmx_fall`**, never under the
+production name: a player who has downloaded Petopia's copy must never be
+told by the test server that their map "differs from the server's", or the
+other way round. `tools/deploy-test.sh` deploys this repository to test-gmod,
+renaming the BSP, its .nav and its thumbnail on the way in; the city is keyed
+by both names, and the server's systemd drop-in (`gmod.service.d/map.conf`)
+names `test_petopia_bmx_fall`. Per-map data (scores, radio placement) is kept
+per name.
+
 `sv_city.lua` sends the map icon (`maps/thumb/petopia_bmx_fall.png`) to
 everyone who joins (`resource.AddFile`). Clients download the map from the
 server.
