@@ -95,6 +95,16 @@ T.test("signs: no sign covers or cuts into a window, on any facade", function()
     T.ok(#L.signs >= 15, "signs: " .. #L.signs)
 end)
 
+T.test("signs: the wall behind a sign is truly blank: every style's plain panel has no window", function()
+    local City = city()
+    local ok = {}
+    for _, id in ipairs(City.WindowlessPanels) do ok["building_template/building_template" .. id] = true end
+    for name, st in pairs(City.Styles) do
+        local M = City.Materials[st.plain]
+        T.ok(M and ok[M.tex], name .. "'s plain panel " .. tostring(M and M.tex) .. " is a windowless one")
+    end
+end)
+
 T.test("signs: the window check has teeth (without the blank wall, signs cover windows)", function()
     local City = city()
     local B = City.Builder

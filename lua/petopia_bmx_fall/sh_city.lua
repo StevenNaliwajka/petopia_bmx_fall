@@ -83,7 +83,8 @@ City.Materials = {
     conc_ribbon = bt("007b"), conc_ribbon2 = bt("007c"), conc_ribbon3 = bt("007h"),
     conc_shop = bt("010b"), conc_shop2 = bt("010c"), glass_black = bt("009e"),
     -- red brick
-    red_plain = bt("010h"), red_arch = bt("010i"), red_arch2 = bt("011b"),
+    -- (010h and 010i are boarded-up windows; 011b is the plain red brick)
+    red_plain = bt("010h"), red_arch = bt("010i"), red_arch2 = bt("011b"), red_brick = bt("011b"),
     red_shutter = bt("011c", 128, 128),
     -- ochre
     ochre_plain = bt("012a"), ochre_win = bt("012b"), ochre_win2 = bt("012g"),
@@ -184,7 +185,7 @@ City.Styles = {
     tan    = { ground = { "tan_door", "tan_arch" }, win = { "tan_win", "tan_win2" },
                plain = "tan_plain", trim = "grey_trim" },
     red    = { ground = { "red_shutter", "red_arch2" }, win = { "red_arch" },
-               plain = "red_plain", trim = "brick_trim" },
+               plain = "red_brick", trim = "brick_trim" },
     stone  = { ground = { "stone_door", "stone_arch" }, win = { "stone_win", "stone_tall" },
                plain = "stone_plain", trim = "stone_trim" },
     dark   = { ground = { "conc_shop", "conc_shop2" }, win = { "dark_win", "dark_win2", "dark_win3" },
@@ -196,6 +197,12 @@ City.Styles = {
     glass  = { ground = { "conc_shop2", "conc_shop" }, win = { "glass_grey", "glass_dark", "glass_black" },
                plain = "conc_plain", trim = "grey_trim" },
 }
+
+-- The building_template panels with no window, door or opening in them
+-- (looked at, 2026-10-07): every style's `plain` must be one, since a plain
+-- panel is what stands behind a sign (tests/test_signs.lua).
+City.WindowlessPanels = { "001a", "002a", "003a", "004a", "005a", "007a", "011b", "012a", "013a",
+                          "021a", "022a", "029a" }
 
 --------------------------------------------------------------------------
 -- A seeded generator: Park-Miller minimal standard. Exact in doubles
