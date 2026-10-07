@@ -127,7 +127,8 @@ T.test("routes: every line spans the park wall to wall, with a named terminus pa
                 local along = (l.axis == "y") and s.pos[2] or s.pos[1]
                 local across = (l.axis == "y") and s.pos[1] or s.pos[2]
                 local inward = (l.axis == "y") and s.normal[2] or s.normal[1]
-                local e = math.abs(along - l.from) < 20 and l.from or (math.abs(along - l.to) < 20 and l.to or nil)
+                -- (the sign's face stands proud of the facade in its case: 40)
+                local e = math.abs(along - l.from) < 40 and l.from or (math.abs(along - l.to) < 40 and l.to or nil)
                 T.ok(e ~= nil, l.name .. " sign on an end wall, at " .. along)
                 if e then
                     atEnd[e] = atEnd[e] + 1
@@ -355,6 +356,21 @@ T.test("the station signs draw both ways, the same on both portals; the trains d
     env.surface.DrawTexturedRect = function() end
     env.draw.NoTexture = function() end
     env.Material = function() return {} end
+    -- a sign's face is painted into a render target (cl_city.lua paintFace)
+    env.GetRenderTargetEx = function(name) return { GetName = function() return name end } end
+    env.CreateMaterial = function(name) return { name = name } end
+    env.render.PushRenderTarget = function() end
+    env.render.PopRenderTarget = function() end
+    env.render.Clear = function() end
+    env.render.SetMaterial = function() end
+    env.cam.Start2D = function() end
+    env.cam.End2D = function() end
+    env.Matrix = function() return { Translate = function() end, Scale = function() end, Rotate = function() end } end
+    env.FrameNumber = function() return 1 end
+    env.mesh = env.mesh or {}
+    for _, k in ipairs({ "Begin", "End", "Position", "TexCoord", "Color", "AdvanceVertex" }) do
+        env.mesh[k] = env.mesh[k] or function() end
+    end
     -- read what a transit sign draws, one sign at a time
     local texts = {}
     local realTexts = env.draw.SimpleText

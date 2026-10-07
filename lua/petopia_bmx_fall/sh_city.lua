@@ -795,7 +795,7 @@ end
 -- covers a window (tests/test_signs.lua checks every sign against every
 -- window). Not how a real street works; it reads better.
 --------------------------------------------------------------------------
-City.SignPanelPx = { ad = 360, transit = 180, street = 170 }
+City.SignPanelPx = { ad = 360, transit = 200, street = 170 }
 City.SIGN_BORDER = 28            -- panel px of frame round the board
 City.SIGN_RT = { ad = { 1024, 512 }, transit = { 1024, 256 }, street = { 1024, 256 } }
 City.SIGN_CASE = 18              -- a wall sign's case: wall to face
@@ -836,7 +836,20 @@ function B:placeWallSigns(side, built, list)
         local a = sg.pos[ax]
         local home
         for _, bd in ipairs(built) do if bd[ax] <= a and bd[ax + 3] >= a then home = bd end end
-        if home then
+        if sg.metro then
+            -- a station sign stays over its portal, whatever buildings are
+            -- behind it: the wall behind it is blanked all the same
+            local F = City.SignFrame(sg)
+            local wall = side.at - side.out * (self.def.frontage.inset or 4)
+            local face = wall + (n[1] ~= 0 and n[1] or n[2]) * City.SIGN_CASE
+            local pos = { 0, 0, sg.pos[3] }
+            pos[ax] = a
+            pos[lo_i] = face
+            sg.pos, sg.normal, sg.wall = pos, n, wall
+            local m = City.SIGN_MARGIN
+            self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = a - F.fw / 2 - m, a1 = a + F.fw / 2 + m,
+                                              z0 = sg.pos[3] - F.fh / 2 - m, z1 = sg.pos[3] + F.fh / 2 + m }
+        elseif home then
             local lo, hi = math.max(home[ax], w0) + 48, math.min(home[ax + 3], w1) - 48
             local F = City.SignFrame(sg)
             if F.fw > hi - lo then

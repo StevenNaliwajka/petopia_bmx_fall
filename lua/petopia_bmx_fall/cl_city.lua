@@ -1273,7 +1273,11 @@ local function signFace(s, i)
 end
 
 local function paintFace(s, R, F)
-    if s.pic then s._pic = City.AdPicture(s) end
+    if s.pic then
+        -- a photo that fails leaves the board without one, never the frame broken
+        local ok, pic = pcall(City.AdPicture, s)
+        s._pic = ok and pic or nil
+    end
     local P = City._pics[s]
     local stamp = tostring(P and P.at or 0) .. (s._pic and "p" or "-")
     local live = s.style == "neon"

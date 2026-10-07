@@ -125,15 +125,15 @@ T.test("signs: each wall sign hangs on one building, inside the park, under its 
             walls = walls + 1
             local fp, ax = footprint(City, s)
             local h = s.home
-            T.ok(fp[1] >= h[ax] + 32 and fp[2] <= h[ax + 3] - 32, s.text .. " on one building, not across two")
+            T.ok(fp[1] >= h[ax] + 32 and fp[2] <= h[ax + 3] - 32, tostring(s.text or s.metro) .. " on one building, not across two")
             local w0, w1 = ax == 1 and p[1] or p[2], ax == 1 and p[4] or p[5]
-            T.ok(fp[1] >= w0 and fp[2] <= w1, s.text .. " over the park's wall, where it can be seen")
-            T.ok(fp[4] <= h[6] - 32 - 16, s.text .. " under the cornice (top " .. fp[4] .. ", roof " .. h[6] .. ")")
-            T.ok(fp[3] >= City.Maps.gm_skatepark.ground + 100, s.text .. " clear of the ground")
+            T.ok(fp[1] >= w0 and fp[2] <= w1, tostring(s.text or s.metro) .. " over the park's wall, where it can be seen")
+            T.ok(fp[4] <= h[6] - 32 - 16, tostring(s.text or s.metro) .. " under the cornice (top " .. fp[4] .. ", roof " .. h[6] .. ")")
+            T.ok(fp[3] >= City.Maps.gm_skatepark.ground + 100, tostring(s.text or s.metro) .. " clear of the ground")
             -- stands proud of its own facade by the case depth
             local wallPlane = s.wall
             local facePlane = s.normal[1] ~= 0 and s.face[1] or s.face[2]
-            T.near(math.abs(facePlane - wallPlane), City.SIGN_CASE, 0.01, s.text .. " case depth")
+            T.near(math.abs(facePlane - wallPlane), City.SIGN_CASE, 0.01, tostring(s.text or s.metro) .. " case depth")
         end
     end
     T.ok(walls >= 10, "wall signs placed: " .. walls)
@@ -142,7 +142,7 @@ end)
 T.test("signs: the face is the open front of a case, nothing lies in its plane (no z-fighting)", function()
     local City, L = city()
     for _, s in ipairs(L.signs) do
-        T.ok(s.face and s.fw and s.fh and s.case, tostring(s.text) .. " has a face and a case")
+        T.ok(s.face and s.fw and s.fh and s.case, tostring(s.text or s.metro) .. " has a face and a case")
         local fp, ax, plane = footprint(City, s)
         fp[4] = s.face[3] + s.fh / 2
         local nax = s.normal[1] ~= 0 and 1 or 2
@@ -151,15 +151,15 @@ T.test("signs: the face is the open front of a case, nothing lies in its plane (
         local sn = s.normal[nax]
         local front = sn > 0 and b[nax + 3] or b[nax]
         local rear = sn > 0 and b[nax] or b[nax + 3]
-        T.near(front, plane, 0.01, s.text .. " case meets the face")
-        T.ok((plane - rear) * sn >= 8, s.text .. " case has depth behind the face")
+        T.near(front, plane, 0.01, tostring(s.text or s.metro) .. " case meets the face")
+        T.ok((plane - rear) * sn >= 8, tostring(s.text or s.metro) .. " case has depth behind the face")
         for mat, list in pairs(L.faces) do
             for _, q in ipairs(list) do
                 local n, mn, mx = quadInfo(q)
                 if math.abs(n[3]) < 1e-6 and math.abs(math.abs(n[nax]) - 1) < 1e-6 then
                     local qp = mn[nax]
                     if math.abs(qp - plane) < 1 and mn[ax] < fp[2] - 0.5 and mx[ax] > fp[1] + 0.5 and mn[3] < fp[4] - 0.5 and mx[3] > fp[3] + 0.5 then
-                        T.ok(false, s.text .. ": a " .. mat .. " quad in the face's plane")
+                        T.ok(false, tostring(s.text or s.metro) .. ": a " .. mat .. " quad in the face's plane")
                     end
                 end
             end
@@ -171,10 +171,10 @@ T.test("signs: artwork fits its render target 1:1 and is fine enough to read", f
     local City, L = city()
     for _, s in ipairs(L.signs) do
         local Fr = City.SignFrame(s)
-        T.ok(Fr.ow <= Fr.rt[1] and Fr.oh <= Fr.rt[2], tostring(s.text) .. " artwork " .. math.floor(Fr.ow) .. "x" .. Fr.oh
+        T.ok(Fr.ow <= Fr.rt[1] and Fr.oh <= Fr.rt[2], tostring(s.text or s.metro) .. " artwork " .. math.floor(Fr.ow) .. "x" .. Fr.oh
             .. " fits " .. Fr.rt[1] .. "x" .. Fr.rt[2] .. " without shrinking")
-        T.ok(Fr.scale <= 0.8, tostring(s.text) .. ": " .. Fr.scale .. " units a pixel")
-        T.ok(s.w >= 300 or s.look ~= "ad", tostring(s.text) .. " still big enough to read: " .. s.w)
+        T.ok(Fr.scale <= 0.8, tostring(s.text or s.metro) .. ": " .. Fr.scale .. " units a pixel")
+        T.ok(s.w >= 300 or s.look ~= "ad", tostring(s.text or s.metro) .. " still big enough to read: " .. s.w)
     end
 end)
 
@@ -197,7 +197,7 @@ T.test("signs: floodlit ads have real lamps over the face, lenses facing down", 
                     found = found + 1
                 end
             end
-            T.eq(found, City.SIGN_LAMP.n, tostring(s.text) .. " lamps over its face")
+            T.eq(found, City.SIGN_LAMP.n, tostring(s.text or s.metro) .. " lamps over its face")
         end
     end
     T.ok(flood >= 6, "floodlit ads: " .. flood)
@@ -207,15 +207,15 @@ T.test("signs: lit by the scene through the face's own colour, never glowing, ne
     local City, L = city()
     for _, s in ipairs(L.signs) do
         local top, bottom, tint = City.SignFaceLight(s, L)
-        T.ok(top <= 1 and bottom <= 1, tostring(s.text) .. " never brighter than its paint")
-        T.ok(bottom >= 0.5, tostring(s.text) .. " readable at its foot: " .. bottom)
-        for _, c in ipairs(tint) do T.between(c, 0.8, 1, tostring(s.text) .. " tint is gentle") end
+        T.ok(top <= 1 and bottom <= 1, tostring(s.text or s.metro) .. " never brighter than its paint")
+        T.ok(bottom >= 0.5, tostring(s.text or s.metro) .. " readable at its foot: " .. bottom)
+        for _, c in ipairs(tint) do T.between(c, 0.8, 1, tostring(s.text or s.metro) .. " tint is gentle") end
         if (s.look or "ad") == "ad" and (s.style == "tv" or s.style == "neon") then
-            T.ok(top == 1 and bottom == 1, s.text .. " is its own light")
+            T.ok(top == 1 and bottom == 1, tostring(s.text or s.metro) .. " is its own light")
         elseif City.SignFloodlit(s) then
-            T.ok(top > bottom, s.text .. " brighter under its lamps")
+            T.ok(top > bottom, tostring(s.text or s.metro) .. " brighter under its lamps")
         else
-            T.ok(top >= bottom, tostring(s.text) .. " lit from above")
+            T.ok(top >= bottom, tostring(s.text or s.metro) .. " lit from above")
         end
     end
 end)
@@ -285,4 +285,16 @@ T.test("signs (client): painted once into a render target, drawn as one quad at 
         end
     end
     T.ok(seen, "the first sign was drawn from in front of it")
+end)
+
+T.test("signs: tools/city/export.lua writes every sign (station signs have no text, ads no colour)", function()
+    local here = debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or "tests"
+    local f = io.popen("lua5.1 " .. here .. "/../tools/city/export.lua gm_skatepark 2>&1")
+    local out = f:read("*a")
+    f:close()
+    local City, L = city()
+    T.ok(out:sub(1, 1) == "{" and out:find('"signs":%['), "export wrote JSON: " .. out:sub(1, 120))
+    local n = 0
+    for _ in out:match('"signs":(%b[])'):gmatch('"text":') do n = n + 1 end
+    T.eq(n, #L.signs, "every sign exported")
 end)
