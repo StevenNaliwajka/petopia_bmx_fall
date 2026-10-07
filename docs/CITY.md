@@ -62,9 +62,18 @@ and `mood` tables).
   is), adds a thin warm haze and a slight warm grade, glows at the lamp
   heads, dynamic lights from the nearest lamps (models only), and the odd leaf
   falling and settling.
-- **Signs are lit, not glowing**: each board is shaded to the light where it
-  stands (`signLight`, brighter near a lamp), and a billboard's own lamps
-  throw warm pools down its face.
+- **Signs are boards in cases, lit, not glowing**: every sign's artwork
+  (board and frame) is painted once into its own render target and drawn as
+  the open front of a steel case (`B:signCase`), so nothing shares its plane
+  and nothing shows through it. Its light is in the face's vertex colours:
+  the light where it stands (`signLight`, brighter near a street lamp), and on
+  a floodlit ad, its own lamps (real arms and lenses on the case) brightening
+  the top. TV and neon boards are their own light.
+- **Signs sit on blank wall**: each wall sign moves onto one building (never
+  across two, never over the roof line), and the bays of the facade behind it
+  are laid as that style's plain, windowless panel. Station signs stay over
+  their portals with the wall behind them blanked the same way.
+  `tests/test_signs.lua` checks every sign against every window.
 
 Nothing here is an entity a player can touch: plants are drawn by the client
 from the render hook (never faded or culled by distance, always at full
