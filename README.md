@@ -13,6 +13,32 @@ walls to z 528, sky to z 1720). Every brush is our own; no other map's content.
 | `mapsrc/build_vmf.py` | The map, as code: writes `mapsrc/petopia_bmx_fall.vmf` (deterministic, stdlib only). |
 | `tools/build-map.sh` | VMF -> vbsp -> vvis -> vrad (`-both`, 2 threads) under wine -> `maps/petopia_bmx_fall.bsp`. `-final` for final-quality light. |
 | `maps/petopia_bmx_fall.bsp` | The compiled map (base HL2/GMod materials only). |
+| `maps/thumb/petopia_bmx_fall.png` | The map icon (Peter on his BMX against a fall sunset). |
+| `lua/autorun/petopia_bmx_fall.lua` | The map's Lua: loads the city below. |
+| `lua/petopia_bmx_fall/` | The city around the park: buildings, skyline, viaducts and trains, billboards, greenery, and the late-autumn mood (sky, haze, lamps, falling leaves). See [docs/CITY.md](docs/CITY.md). |
+| `lua/entities/bmx_city_solid/` | The city's colliders (viaducts, piers, planting beds). |
+| `tools/city/` | Offline preview of the city layout. |
+| `tests/` | The city's tests, run on the BMX addon's offline harness. |
+
+## The three pieces
+
+| Piece | Repository | What it is |
+|---|---|---|
+| **BMX** | root/gmod-bmx | The vehicle mod (Workshop 3814420080). |
+| **BMX (Mode)** | root/gmod-bmx-mode | The gamemode: games, scores, the trick bot. |
+| **petopia_bmx_fall** | root/petopia_bmx_fall (this) | The map: the BSP and its city. |
+
+The map needs neither of the others to load; the city's settings show up in
+Options > BMX when the BMX addon is installed. Install the whole repository as
+a folder in `garrysmod/addons/` (it has `maps/` and `lua/`), and start with
+`+map petopia_bmx_fall` (with `+gamemode bmx` for the full BMX server).
+
+## Tests
+
+    lua5.1 tests/run.lua
+
+The city's tests on the BMX addon's offline harness, which this finds at
+`$BMX_ADDON`, else `../gmod-bmx`, else `tests/.addon`.
 
 ## Rebuilding
 
