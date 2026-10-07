@@ -84,12 +84,18 @@ BMX.City.Maps.gm_skatepark = {
         -- the park for 7-8 seconds, and one comes along on some line every
         -- 10 seconds or so. Each run is shorter than its period, so a line
         -- never has two trains on it.
+        -- Each line runs both ways: `ends` names the terminus past each end
+        -- (`to` is where +1 trains go, `from` where -1 trains go), and the
+        -- trains' boards and the station signs all read from it.
         { name = "line1", axis = "y", at = 1685, from = -1792, to = 768, deck = 1000,
-          period = 24, offset = 0, cars = 3, speed = 600, runout = 800 },
+          period = 24, offset = 0, cars = 3, speed = 600, runout = 800,
+          label = "1", color = { 220, 40, 40 }, ends = { to = "SPOONER ST", from = "QUAHOG HARBOR" } },
         { name = "line2", axis = "y", at = 2665, from = -1792, to = 768, deck = 1000,
-          period = 29, offset = 9, cars = 4, speed = 600, runout = 800 },
+          period = 29, offset = 9, cars = 4, speed = 600, runout = 800,
+          label = "2", color = { 30, 120, 220 }, ends = { to = "TOY FACTORY", from = "JAMES WOODS HIGH" } },
         { name = "line3", axis = "x", at = -300, from = -256, to = 3584, deck = 1400,
-          period = 35, offset = 17, cars = 4, speed = 700, runout = 800 },
+          period = 35, offset = 17, cars = 4, speed = 700, runout = 800,
+          label = "3", color = { 30, 160, 70 }, ends = { to = "DOWNTOWN", from = "PAWTUCKET BREWERY" } },
     },
 
     -- Piers under the crossings, in clear lanes (tests/test_city.lua proves
@@ -133,19 +139,21 @@ BMX.City.Maps.gm_skatepark = {
           pos = { 2950, 758, 620 }, normal = { 0, -1, 0 }, w = 620, h = 250 },
         { look = "street", text = "SPOONER ST", sub = "31",
           pos = { 2200, 762, 300 }, normal = { 0, -1, 0 }, w = 320, h = 72 },
-        -- the metro: a station sign over each portal
-        { look = "transit", line = "1", text = "SPOONER ST", sub = "Quahog Metro", color = { 220, 40, 40 },
-          pos = { 1685, 758, 1350 }, normal = { 0, -1, 0 }, w = 480, h = 120 },
-        { look = "transit", line = "1", text = "SPOONER ST", sub = "Quahog Metro", color = { 220, 40, 40 },
-          pos = { 1685, -1782, 1350 }, normal = { 0, 1, 0 }, w = 480, h = 120 },
-        { look = "transit", line = "2", text = "TOY FACTORY", sub = "Quahog Metro", color = { 30, 120, 220 },
-          pos = { 2665, 758, 1350 }, normal = { 0, -1, 0 }, w = 480, h = 120 },
-        { look = "transit", line = "2", text = "TOY FACTORY", sub = "Quahog Metro", color = { 30, 120, 220 },
-          pos = { 2665, -1782, 1350 }, normal = { 0, 1, 0 }, w = 480, h = 120 },
-        { look = "transit", line = "3", text = "DOWNTOWN", sub = "Quahog Metro", color = { 30, 160, 70 },
-          pos = { -246, 20, 1480 }, normal = { 1, 0, 0 }, w = 480, h = 120 },
-        { look = "transit", line = "3", text = "DOWNTOWN", sub = "Quahog Metro", color = { 30, 160, 70 },
-          pos = { 3574, -620, 1480 }, normal = { -1, 0, 0 }, w = 480, h = 120 },
+        -- the metro: a station sign over each portal of each line (`metro`
+        -- names the line). Both portals' signs read the same, one row per
+        -- direction: NORTHBOUND -> where northbound trains go, and so on.
+        { look = "transit", metro = "line1", sub = "Quahog Metro",
+          pos = { 1685, 758, 1350 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+        { look = "transit", metro = "line1", sub = "Quahog Metro",
+          pos = { 1685, -1782, 1350 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+        { look = "transit", metro = "line2", sub = "Quahog Metro",
+          pos = { 2665, 758, 1350 }, normal = { 0, -1, 0 }, w = 640, h = 150 },
+        { look = "transit", metro = "line2", sub = "Quahog Metro",
+          pos = { 2665, -1782, 1350 }, normal = { 0, 1, 0 }, w = 640, h = 150 },
+        { look = "transit", metro = "line3", sub = "Quahog Metro",
+          pos = { -246, 100, 1480 }, normal = { 1, 0, 0 }, w = 640, h = 150 },
+        { look = "transit", metro = "line3", sub = "Quahog Metro",
+          pos = { 3574, -800, 1480 }, normal = { -1, 0, 0 }, w = 640, h = 150 },
         -- west wall
         { look = "ad", style = "minimal", text = "Goldman's", sub = "Feeling sick? Try feeling better.",
           fine = "Mort Goldman, pharmacist. Not a doctor.", burst = "PHARMACY", bg = { 22, 40, 34 }, band = { 0, 210, 140 },

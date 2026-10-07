@@ -98,7 +98,12 @@ Everything is in the map's table in `sh_city_maps.lua`:
   towers. One floor is 128 units, one HL2 `building_template` panel.
 - `skyline`: tower count, distance band, heights.
 - `viaducts`: each line's axis, position, deck height, train period, offset,
-  cars and speed. `piers` stand under the crossings.
+  cars and speed, its number and colour (`label`, `color`), and `ends`: the
+  terminus past each end (`to` is where trains going from -> to are headed,
+  `from` the way back). A train's nose and tail boards and the station sign at
+  each portal (a `transit` sign with `metro = "<line name>"`) all read from
+  `ends`, so one direction always goes to one place (`tests/test_trains.lua`).
+  `piers` stand under the crossings.
 - `signs`: text panels on the facades.
 
 Styles (which panels go on the street floor, the floors above and the
