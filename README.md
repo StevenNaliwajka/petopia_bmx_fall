@@ -37,9 +37,9 @@ Found a bug or have an idea? [Open an issue on GitHub](https://github.com/Steven
 
 | Piece | Repository | What it is |
 |---|---|---|
-| **BMX** | root/gmod-bmx | The vehicle mod (Workshop 3814420080). |
-| **BMX (Mode)** | root/gmod-bmx-mode | The gamemode: games, scores, the trick bot. |
-| **petopia_bmx_fall** | root/petopia_bmx_fall (this) | The map: the BSP and its city. |
+| **BMX** | gmod/gmod-bmx | The vehicle mod (Workshop 3814420080). |
+| **BMX (Mode)** | gmod/gmod-bmx-mode | The gamemode: games, scores, the trick bot. |
+| **petopia_bmx_fall** | gmod/petopia_bmx_fall (this) | The map: the BSP and its city. |
 
 The map needs neither of the others to load; the city's settings show up in
 Options > BMX when the BMX addon is installed. Install the whole repository as
