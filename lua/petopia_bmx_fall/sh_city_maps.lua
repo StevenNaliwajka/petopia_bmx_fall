@@ -251,22 +251,28 @@ BMX.City.Maps.gm_skatepark = {
 
     -- The park's floor, laid over the map's bare concrete: slabs to ride on,
     -- brick paving along the walls, cobbles round the piers, a kerb line,
-    -- leaves. Lit per vertex: ambient afternoon light and the lamps' pools.
+    -- leaves. Lit per vertex: ambient afternoon light, the west wall's
+    -- shadow (wallTop, shadow: as dark as the open floor times this), and
+    -- the lamps' pools. Kept under 1 everywhere (a vertex colour clips, and
+    -- clipped pools read as blown-out white); tests/test_lighting.lua.
     floor = {
         cell = 64, walk = 176, lift = 0.6, plaza = 288,
         litter = 240,
-        ambient = { 0.74, 0.65, 0.56 },
-        lampRadius = 440, lampColor = { 0.6, 0.4, 0.18 },
+        ambient = { 0.62, 0.55, 0.47 },
+        wallTop = 528, shadow = 0.85, shadowSoft = 192,
+        lampRadius = 420, lampColor = { 0.34, 0.23, 0.1 },
     },
 
     -- A late autumn afternoon (cl_city_mood.lua): the sun low in the west
     -- behind heavy cloud. `light` warms every surface of the city; the sky is
     -- HL2's golden-hour sky, dimmed; the haze is thin and far.
+    -- The grade adds contrast and keeps the colour (it used to desaturate
+    -- and lift, which with the bright unlit city read as washed out).
     mood = {
-        light = { 1.0, 0.86, 0.72 },
+        light = { 0.92, 0.79, 0.65 },
         sky = "skybox/sky_day01_08", skyTint = { 0.8, 0.72, 0.66 }, skyYaw = 180,
         fog = { start = 3000, finish = 15000, density = 0.5, color = { 120, 92, 74 } },
-        grade = { brightness = -0.04, contrast = 1.06, colour = 0.88, mulr = 0.1, mulg = 0.03, addr = 0.015, addg = 0.004 },
+        grade = { brightness = -0.05, contrast = 1.14, colour = 1.02, mulr = 0.08, mulg = 0.02, addr = 0.01, addg = 0.002 },
         lampColor = { 255, 186, 112 }, lampBrightness = 1.3, lampSize = 560,
         leafEvery = 0.22,
         -- the signs are lit, not glowing: this much of full brightness in

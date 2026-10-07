@@ -690,11 +690,12 @@ T.test("the floor: laid over the whole park, a hair above it, paving by the wall
     for _, q in ipairs(L.faces.pave_brick) do
         for c = 0, 3 do
             local r = q[19 + c * 3]
-            T.ok(r >= amb[1] - 1e-9 and r <= 2, "vertex light in range")
+            -- never below the wall's shadow, never past what a vertex colour holds
+            T.ok(r >= amb[1] * (fl.shadow or 1) - 1e-9 and r <= 1, "vertex light in range: " .. r)
             brightest = math.max(brightest, r)
         end
     end
-    T.ok(brightest > amb[1] + 0.4, "pools of lamplight on the paving: " .. brightest)
+    T.ok(brightest > amb[1] + 0.25, "pools of lamplight on the paving: " .. brightest)
 end)
 
 T.test("the lamps stand in the beds with their arms over the park, clear of the signs", function()

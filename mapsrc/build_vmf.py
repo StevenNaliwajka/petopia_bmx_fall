@@ -40,6 +40,23 @@ MAT_SKY = "TOOLS/TOOLSSKYBOX"
 MAT_NODRAW = "TOOLS/TOOLSNODRAW"
 SKYNAME = "sky_day02_09"
 
+# The light (see entities()). "r g b brightness".
+SUN = "255 206 150 200"          # warm, low, moderate
+SKY = "200 212 255 175"          # cool sky fill: lights the shade
+LAMP = "255 186 112 260"         # the street lamps, as the city draws them
+LAMP_HALF, LAMP_ZERO = 260, 640  # their falloff, units
+# Fill in the west wall's shadow. The sunlit park floor and the city's sunlit
+# east side throw light back into it; vrad can't (the facades are Lua
+# meshes, the BSP only has the bare brick), so a row of soft lights high
+# along the west wall stands in for that bounce. Without it the west eighth
+# of the park, and the spine in its south-west corner most of all, sat in
+# near-black shade.
+FILL = "236 214 196 60"
+FILL_HALF, FILL_ZERO = 420, 1100
+FILL_AT = [(BOX[0] + 112, y, 440) for y in range(BOX[1] + 128, BOX[3], 384)]
+EXPOSURE = (0.6, 1.1)            # HDR auto-exposure clamp
+BLOOM = 0.15
+
 # name, x0, y0, x1, y1, ztop, facing
 #   quarterpipe: facing = the side the high (vertical) end is on
 #   flatramp:    facing = the side the deck is on
@@ -336,11 +353,29 @@ def shell():
 # --------------------------------------------------------------------------
 # Entities
 # --------------------------------------------------------------------------
-def ent(ids, cls, **kv):
+def ent(ids, cls, connections=(), **kv):
     s = 'entity\n{\n\t"id" "%d"\n\t"classname" "%s"\n' % (ids.next(), cls)
     for k, v in kv.items():
         s += '\t"%s" "%s"\n' % (k, v)
+    if connections:
+        s += '\tconnections\n\t{\n'
+        for out, target in connections:
+            s += '\t\t"%s" "%s"\n' % (out, target)
+        s += '\t}\n'
     return s + '}\n'
+
+
+def lamps():
+    """The city's street lamp heads, (x, y, z) each: mapsrc/city_lamps.txt,
+    written by tools/city/lamps.lua from the city's own layout."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    out = []
+    with open(os.path.join(here, "city_lamps.txt")) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                out.append(tuple(int(v) for v in line.split()))
+    return out
 
 
 def entities(ids):
@@ -348,16 +383,44 @@ def entities(ids):
     for i, (x, y) in enumerate(SPAWNS):
         out.append(ent(ids, "info_player_start", origin="%d %d %d" % (x, y, FLOOR + 8), angles="0 90 0"))
         out.append(ent(ids, "info_player_deathmatch", origin="%d %d %d" % (x, y, FLOOR + 8), angles="0 90 0"))
-    # A low late-autumn sun in the west, light travelling +x (pitch -28, yaw 0).
+    # THE LIGHT. A low late-autumn sun in the west, light travelling +x (pitch
+    # -28, yaw 0), behind a 464-unit wall: its shadow reaches ~870 units into
+    # the park, over the whole west strip and every ramp in it. So:
+    #   - the sun is warm and moderate (it was 400 and blew the lit slopes out)
+    #   - the sky fill is cool and strong enough to light the shade: in the
+    #     wall's shadow, and on every slope turned from the sun, you still see
+    #     the wood (it was 70, which left the west eighth of the park black)
+    #   - a row of soft lights high along the west wall stands in for the
+    #     bounce into the wall's shadow that vrad can't compute (FILL above)
+    #   - each of the city's street lamps is a real light here too, baked
+    #     onto the ramps beneath it (mapsrc/city_lamps.txt, from the city)
+    #   - the exposure is pinned, so HDR auto-exposure can't brighten the
+    #     shade back into a washed-out frame
+    # tests/test_lighting.lua holds every cell of the park between "too dark"
+    # and "blown out".
     out.append(ent(ids, "light_environment", origin="1664 -512 1500", angles="0 0 0", pitch="-28",
-                   _light="255 214 160 400", _ambient="190 160 130 70",
+                   _light=SUN, _ambient=SKY,
                    _lightHDR="-1 -1 -1 1", _ambientHDR="-1 -1 -1 1", _lightscaleHDR="1",
                    _AmbientScaleHDR="1", SunSpreadAngle="5"))
+    for i, (x, y, z) in enumerate(lamps()):
+        out.append(ent(ids, "light", origin="%d %d %d" % (x, y, z - 24), _light=LAMP,
+                       _lightHDR="-1 -1 -1 1", _lightscaleHDR="1", style="0",
+                       _fifty_percent_distance=str(LAMP_HALF), _zero_percent_distance=str(LAMP_ZERO)))
+    for x, y, z in FILL_AT:
+        out.append(ent(ids, "light", origin="%d %d %d" % (x, y, z), _light=FILL,
+                       _lightHDR="-1 -1 -1 1", _lightscaleHDR="1", style="0",
+                       _fifty_percent_distance=str(FILL_HALF), _zero_percent_distance=str(FILL_ZERO)))
     out.append(ent(ids, "env_fog_controller", origin="1664 -512 1400", fogenable="1",
-                   fogcolor="214 170 120", fogcolor2="214 170 120", fogstart="3000", fogend="14000",
-                   fogmaxdensity="0.35", fogdir="1 0 0", farz="-1", targetname="fog"))
+                   fogcolor="150 118 92", fogcolor2="150 118 92", fogstart="3000", fogend="15000",
+                   fogmaxdensity="0.45", fogdir="1 0 0", farz="-1", targetname="fog"))
     out.append(ent(ids, "shadow_control", origin="1664 -512 1300", angles="62 0 0", color="64 52 40",
                    distance="96"))
+    out.append(ent(ids, "env_tonemap_controller", origin="1664 -512 1200", targetname="tonemap"))
+    out.append(ent(ids, "logic_auto", origin="1664 -512 1100", spawnflags="0", connections=[
+        ("OnMapSpawn", "tonemap,SetAutoExposureMin,%s,0,-1" % EXPOSURE[0]),
+        ("OnMapSpawn", "tonemap,SetAutoExposureMax,%s,0,-1" % EXPOSURE[1]),
+        ("OnMapSpawn", "tonemap,SetBloomScale,%s,0,-1" % BLOOM),
+    ]))
     return out
 
 

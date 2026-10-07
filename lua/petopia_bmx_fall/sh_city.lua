@@ -250,13 +250,17 @@ function B:facing(px, py, pz, nx, ny, nz)
     return (mx - px) * nx + (my - py) * ny + (mz - pz) * nz > 0.5
 end
 
+-- A face's light: roofs full, undersides deep in shade, walls by how
+-- squarely they face the low sun. The spread between a sunlit wall and one
+-- turned away is what gives the city its late-afternoon contrast (it was
+-- 0.62..0.98, and every street read the same flat bright).
 function B:shade(nx, ny, nz, tint)
     local s = self.sun
     local d = nx * s[1] + ny * s[2] + nz * s[3]
     local k
-    if nz > 0.5 then k = 1.0
-    elseif nz < -0.5 then k = 0.42
-    else k = 0.68 + 0.3 * math.max(d, 0) - 0.06 * math.max(-d, 0) end
+    if nz > 0.5 then k = 0.94
+    elseif nz < -0.5 then k = 0.36
+    else k = 0.58 + 0.4 * math.max(d, 0) - 0.1 * math.max(-d, 0) end
     return k * (tint or 1)
 end
 
@@ -1357,13 +1361,41 @@ end
 -- riders ride, a band of brick paving along the walls, cobbled plazas round
 -- the piers, a kerb line between, and fallen leaves.
 --
--- It is lit here, per vertex: the afternoon's ambient light and a warm pool
--- under every street lamp. The overlay is an unlit mesh -- no engine light
--- can reach it -- so the lamps' light is baked into it.
+-- It is lit here, per vertex: the afternoon's ambient light, the shadow the
+-- wall on the sun's side throws across the floor (soft-edged, and only a
+-- shade darker: the map bakes fill light into it), and a warm pool under
+-- every street lamp. The overlay is an unlit mesh -- no engine light can
+-- reach it -- so all of that is baked into it. tests/test_lighting.lua keeps
+-- every vertex between too dark and blown out (a vertex colour clips at 1).
 --------------------------------------------------------------------------
+
+-- 1 in the open, fl.shadow (e.g. 0.85) deep in the sun-side wall's shadow.
+function B:wallShadow(x, y, fl)
+    local k = fl.shadow
+    if not k or not fl.wallTop then return 1 end
+    local p, s = self.def.park, self.sun
+    local h = math.sqrt(s[1] * s[1] + s[2] * s[2])
+    if h < 1e-6 or s[3] <= 0 then return 1 end
+    -- how far the floor point is from the wall the sun is behind, along
+    -- the ray toward the sun (in plan)
+    local run
+    if math.abs(s[1]) >= math.abs(s[2]) then
+        run = (s[1] < 0 and (x - p[1]) or (p[4] - x)) / (math.abs(s[1]) / h)
+    else
+        run = (s[2] < 0 and (y - p[2]) or (p[5] - y)) / (math.abs(s[2]) / h)
+    end
+    local reach = (fl.wallTop - self.def.ground) * h / s[3]   -- the shadow's depth
+    local soft = fl.shadowSoft or 160
+    local t = (run - (reach - soft / 2)) / soft                -- 0 in shade .. 1 in sun
+    if t <= 0 then return k elseif t >= 1 then return 1 end
+    t = t * t * (3 - 2 * t)
+    return k + (1 - k) * t
+end
+
 function B:lightAt(x, y, fl)
     local a = fl.ambient or { 0.72, 0.64, 0.56 }
-    local r, g, b = a[1], a[2], a[3]
+    local sh = self:wallShadow(x, y, fl)
+    local r, g, b = a[1] * sh, a[2] * sh, a[3] * sh
     local pool, warm = fl.lampRadius or 420, fl.lampColor or { 0.62, 0.42, 0.2 }
     for _, l in ipairs(self.lamps) do
         local dx, dy = x - l.head[1], y - l.head[2]
