@@ -130,7 +130,7 @@ BMX.City.Maps.gm_skatepark = {
           pic = { { model = "models/props_junk/shoe001a.mdl", ang = { 0, -30, 0 } },
                   { model = "models/props_c17/briefcase001a.mdl", at = { -14, 18, 0 }, ang = { 0, 20, 0 } } },
           picPitch = 18, picBg = { 90, 70, 40 },
-          pos = { 2950, 758, 620 }, normal = { 0, -1, 0 }, w = 620, h = 250 },
+          pos = { 2112, 758, 660 }, normal = { 0, -1, 0 }, w = 620, h = 250 },
         { look = "street", text = "SPOONER ST", sub = "31",
           pos = { 2200, 762, 300 }, normal = { 0, -1, 0 }, w = 320, h = 72 },
         -- the metro: a station sign over each portal
@@ -153,7 +153,7 @@ BMX.City.Maps.gm_skatepark = {
                   { model = "models/healthvial.mdl", at = { 8, 16, 0 }, ang = { 0, -10, 0 } },
                   { model = "models/healthvial.mdl", at = { 8, -16, 0 }, ang = { 0, 15, 0 } } },
           picPitch = 18, picBg = { 40, 70, 60 },
-          pos = { -248, 200, 440 }, normal = { 1, 0, 0 }, w = 600, h = 220 },
+          pos = { -248, 448, 440 }, normal = { 1, 0, 0 }, w = 600, h = 230 },
         { look = "ad", style = "neon", text = "CLEVELAND'S DELI", sub = "Sandwiches so good you'll say \"Oh, that's nice\"",
           fine = "OPEN LATE  *  NO BATHTUBS ON THE 2ND FLOOR", fg = { 255, 170, 40 }, band = { 60, 230, 255 },
           pic = { { model = "models/food/burger.mdl", ang = { 0, -20, 0 } }, { model = "models/food/hotdog.mdl", at = { 0, 12, -2 }, ang = { 0, 30, 0 } } },
@@ -172,7 +172,7 @@ BMX.City.Maps.gm_skatepark = {
           pic = { { model = "models/props_lab/binderredlabel.mdl", ang = { 0, -30, 0 } },
                   { model = "models/props_lab/bindergreen.mdl", at = { -4, 14, 0 }, ang = { 0, -10, 0 } } },
           picPitch = 16, picBg = { 90, 70, 60 },
-          pos = { 3570, 300, 600 }, normal = { -1, 0, 0 }, w = 640, h = 260 },
+          pos = { 3570, -40, 600 }, normal = { -1, 0, 0 }, w = 640, h = 260 },
         -- south wall
         { look = "ad", style = "comic", text = "HAPPY-GO-LUCKY TOYS", sub = "So safe, we tested them on Peter!", burst = "NEW\nTOYS!",
           fine = "*Batteries, instructions and happiness sold separately.",

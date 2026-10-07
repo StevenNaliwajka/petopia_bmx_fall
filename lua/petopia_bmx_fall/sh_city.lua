@@ -111,6 +111,9 @@ City.Materials = {
     grate = { tex = "metal/metalgrate016a", w = 128, h = 128, alpha = true },
     black = { tex = "vgui/white", w = 128, h = 128, color = { 0.02, 0.02, 0.025 } },
     signpanel = { tex = "vgui/white", w = 128, h = 128, color = { 0.07, 0.08, 0.1 } },
+    -- a sign's case (painted steel) and a floodlight's lens
+    signcase = { tex = "metal/metalwall048a", w = 128, h = 128, color = { 0.42, 0.42, 0.45 } },
+    lamplens = { tex = "vgui/white", w = 128, h = 128, color = { 1.0, 0.93, 0.74 }, lit = true },
 
     -- greenery: planting beds, roof gardens, ivy. It is late autumn: the
     -- ivy art is green, so `mul` (the material's $color, which may go past 1
@@ -215,6 +218,7 @@ City.Rng = Rng
 --------------------------------------------------------------------------
 local B = {}
 B.__index = B
+City.Builder = B      -- for the tests (tests/test_signs.lua turns the window blanking off)
 
 local function newBuilder(def)
     local b = setmetatable({ def = def, faces = {}, solids = {}, lines = {}, signs = {},
@@ -354,6 +358,15 @@ function B:facade(s, z0, z1, style, pick, tint, fromZ, street)
             for i = 0, bays - 1 do
                 local m
                 if f == 0 and street then m = pick.ground(i) else m = pick.upper(i, f) end
+                -- a sign stands in front of this bay: blank wall, no window
+                -- for the sign to cover (tests/test_signs.lua)
+                if self.blanks then
+                    local p0, p1 = at(margin + i * F, 0), at(margin + (i + 1) * F, 0)
+                    local ax = n[1] ~= 0 and 2 or 1
+                    if self:blanked(n, n[1] ~= 0 and s.o[1] or s.o[2], math.min(p0[ax], p1[ax]), math.max(p0[ax], p1[ax]), zb, zt) then
+                        m = style.plain
+                    end
+                end
                 if m == runMat then
                     runLen = runLen + F
                 else
@@ -364,6 +377,23 @@ function B:facade(s, z0, z1, style, pick, tint, fromZ, street)
             flush()
         end
     end
+end
+
+-- Is the bay a0..a1 (along the face, world units) by z0..z1 of a face with
+-- normal n standing at `plane` behind a sign? self.blanks holds each wall
+-- sign's footprint with a margin: { n, plane, a0, a1, z0, z1 }.
+City.SIGN_BLANK_DEPTH = 400
+function B:blanked(n, plane, a0, a1, z0, z1)
+    for _, k in ipairs(self.blanks or {}) do
+        if k.n[1] == n[1] and k.n[2] == n[2] then
+            -- how far in front of this face the sign stands
+            local gap = (k.plane - plane) * (n[1] ~= 0 and n[1] or n[2])
+            if gap > -1 and gap < City.SIGN_BLANK_DEPTH and a0 < k.a1 and a1 > k.a0 and z0 < k.z1 and z1 > k.z0 then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- The cornice: a 32-unit trim band proud of the face, along its whole length.
@@ -491,6 +521,10 @@ function B:row(side, rowDef, rng, mustCover)
         else
             hide(built[i - 1], "0,-1") hide(built[i + 1], "0,1")
         end
+    end
+    -- the signs on this wall find their building before its windows are laid
+    if self.wallSignsBySide and self.wallSignsBySide[side.name] then
+        self:placeWallSigns(side, built, self.wallSignsBySide[side.name])
     end
     for _, bd in ipairs(built) do
         self:building(bd, rng)
@@ -696,6 +730,142 @@ function B:pier(p, name)
     if p.postFrom and p.postTo then
         self:box(x - 16, y - 16, p.postFrom, x + 16, y + 16, p.postTo, "steel", 0.8)
         self:solid(name, x - 16, y - 16, p.postFrom, x + 16, y + 16, p.postTo)
+    end
+end
+
+--------------------------------------------------------------------------
+-- Signs are things, not stickers.
+--
+-- Every sign is a board in a case. The face (the artwork, drawn by
+-- cl_city.lua from a render target, frame included) is the case's OPEN
+-- front: no other surface lies in its plane, so it can never z-fight, and
+-- nothing behind it shows through. The case's sides, top and back are mesh.
+-- A floodlit ad gets its lamps as real arms on the case's top edge.
+--
+-- Wall signs are PLACED, not just put: each one moves along its wall onto one
+-- building (never across two, never over the roof line or the cornice), and
+-- the bays of that facade behind it are laid as blank wall, so a sign never
+-- covers a window (tests/test_signs.lua checks every sign against every
+-- window). Not how a real street works; it reads better.
+--------------------------------------------------------------------------
+City.SignPanelPx = { ad = 360, transit = 180, street = 170 }
+City.SIGN_BORDER = 28            -- panel px of frame round the board
+City.SIGN_RT = { ad = { 1024, 512 }, transit = { 1024, 256 }, street = { 1024, 256 } }
+City.SIGN_CASE = 18              -- a wall sign's case: wall to face
+City.SIGN_BACK = 10              -- a free-standing sign's case behind its face
+City.SIGN_LAMP = { arm = 46, rise = 28, n = 4 }
+City.SIGN_MARGIN = 24            -- blank wall round a sign
+
+function City.SignFloodlit(s)
+    return (s.look or "ad") == "ad" and s.style ~= "tv" and s.style ~= "neon"
+end
+
+-- A sign's artwork in panel pixels and its face in world units:
+--   pw, ph   the board, in panel px (what the style functions draw)
+--   ow, oh   the board and its frame, in panel px (what the render target holds)
+--   scale    world units per panel px
+--   fw, fh   the whole face, board and frame, in world units
+function City.SignFrame(s)
+    local look = s.look or "ad"
+    local px = City.SignPanelPx[look] or 360
+    local scale = s.h / px
+    local B = City.SIGN_BORDER
+    local pw = s.w / scale
+    return { pw = pw, ph = px, ow = pw + 2 * B, oh = px + 2 * B, scale = scale, border = B,
+             fw = s.w + 2 * B * scale, fh = s.h + 2 * B * scale, rt = City.SIGN_RT[look] or City.SIGN_RT.ad }
+end
+
+-- The viewer's right, looking at a face with normal n (pointing at them).
+function City.SignRight(n) return { -n[2], n[1], 0 } end
+
+function B:placeWallSigns(side, built, list)
+    local ax = side.axis == "x" and 1 or 2
+    local lo_i = side.axis == "x" and 2 or 1
+    local p = self.def.park
+    local w0, w1 = side.axis == "x" and p[1] or p[2], side.axis == "x" and p[4] or p[5]
+    local n = side.axis == "x" and { 0, -side.out, 0 } or { -side.out, 0, 0 }
+    self.blanks = self.blanks or {}
+    for _, sg in ipairs(list) do
+        local a = sg.pos[ax]
+        local home
+        for _, bd in ipairs(built) do if bd[ax] <= a and bd[ax + 3] >= a then home = bd end end
+        if home then
+            local lo, hi = math.max(home[ax], w0) + 48, math.min(home[ax + 3], w1) - 48
+            local F = City.SignFrame(sg)
+            if F.fw > hi - lo then
+                local k = (hi - lo) / F.fw
+                sg.w, sg.h = sg.w * k, sg.h * k
+                F = City.SignFrame(sg)
+            end
+            a = math.min(math.max(a, lo + F.fw / 2), hi - F.fw / 2)
+            local lampH = City.SignFloodlit(sg) and City.SIGN_LAMP.rise + 12 or 0
+            -- under the cornice (32) with a storey's breathing room
+            local z = math.min(sg.pos[3], home[6] - 32 - 48 - lampH - F.fh / 2)
+            -- the facade it hangs on, and its face standing proud of it
+            local wall = (side.out > 0) and home[lo_i] or home[lo_i + 3]
+            local face = wall + (n[1] ~= 0 and n[1] or n[2]) * City.SIGN_CASE
+            local pos = { 0, 0, z }
+            pos[ax] = a
+            pos[lo_i] = face
+            sg.pos, sg.normal, sg.wall, sg.home = pos, n, wall, home
+            local m = City.SIGN_MARGIN
+            self.blanks[#self.blanks + 1] = { n = n, plane = face, a0 = a - F.fw / 2 - m, a1 = a + F.fw / 2 + m,
+                                              z0 = z - F.fh / 2 - m, z1 = z + F.fh / 2 + lampH + m }
+        end
+    end
+end
+
+-- An axis-aligned box with one face left open (the sign's face goes there).
+function B:openBox(x0, y0, z0, x1, y1, z1, mats, open, tint)
+    for _, sd in ipairs(sides(x0, y0, x1, y1, z1)) do
+        if not (open and sd.n[1] == open[1] and sd.n[2] == open[2]) then
+            self:quad(mats.side, sd.o, sd.u, DOWN, sd.len, z1 - z0, sd.n, tint, 0, 0)
+        end
+    end
+    self:quad(mats.top or mats.side, { x0, y1, z1 }, { 1, 0, 0 }, { 0, -1, 0 }, x1 - x0, y1 - y0, { 0, 0, 1 }, tint)
+    self:quad(mats.bottom or mats.side, { x0, y0, z0 }, { 1, 0, 0 }, { 0, 1, 0 }, x1 - x0, y1 - y0, { 0, 0, -1 }, tint)
+end
+
+-- The case behind a sign's face, its lamps and hangers. Sets s.face (the
+-- face's centre), s.fw, s.fh and s.case (the case's box, for the tests).
+function B:signCase(s)
+    local F = City.SignFrame(s)
+    local n = s.normal
+    local r = City.SignRight(n)
+    local c = s.pos
+    if s.roof then c = { c[1] + n[1] * 0.5, c[2] + n[2] * 0.5, c[3] } end
+    s.face, s.fw, s.fh = c, F.fw, F.fh
+    local depth = s.wall and math.abs(((n[1] ~= 0) and c[1] or c[2]) - s.wall) or City.SIGN_BACK
+    local back = { c[1] - n[1] * depth, c[2] - n[2] * depth }
+    local hx, hy = math.abs(r[1]) * F.fw / 2, math.abs(r[2]) * F.fw / 2
+    local x0, x1 = math.min(c[1], back[1]) - hx, math.max(c[1], back[1]) + hx
+    local y0, y1 = math.min(c[2], back[2]) - hy, math.max(c[2], back[2]) + hy
+    local z0, z1 = c[3] - F.fh / 2, c[3] + F.fh / 2
+    -- the open side is the face; a wall sign's back is against the wall
+    self:openBox(x0, y0, z0, x1, y1, z1, { side = "signcase" }, { n[1], n[2] }, 1)
+    s.case = { x0, y0, z0, x1, y1, z1 }
+    local function at(along, out, z) return { c[1] + r[1] * along + n[1] * out, c[2] + r[2] * along + n[2] * out, z } end
+    local function bx(p, q, mats, tint)
+        self:box(math.min(p[1], q[1]), math.min(p[2], q[2]), math.min(p[3], q[3]),
+                 math.max(p[1], q[1]), math.max(p[2], q[2]), math.max(p[3], q[3]), mats, tint)
+    end
+    if City.SignFloodlit(s) then
+        -- the floodlights: a post up from the case, an arm reaching out over
+        -- the face, a lamp head with its lens facing down onto the board
+        local L = City.SIGN_LAMP
+        for i = 1, L.n do
+            local a = -s.w / 2 + s.w * (i - 0.5) / L.n
+            bx(at(a - 2, -depth * 0.5 - 2, z1), at(a + 2, -depth * 0.5 + 2, z1 + L.rise), "steel", 0.7)
+            bx(at(a - 2, -depth * 0.5, z1 + L.rise - 4), at(a + 2, L.arm, z1 + L.rise), "steel", 0.7)
+            bx(at(a - 14, L.arm - 6, z1 + L.rise - 12), at(a + 14, L.arm + 6, z1 + L.rise - 2),
+               { side = "signcase", top = "signcase", bottom = "lamplens" }, 1)
+        end
+    end
+    if s.hang then
+        -- a station sign hangs from the viaduct's girders on two rods
+        for _, f in ipairs({ -0.36, 0.36 }) do
+            bx(at(F.fw * f - 3, -depth * 0.5 - 3, z1), at(F.fw * f + 3, -depth * 0.5 + 3, s.hang), "steel", 0.7)
+        end
     end
 end
 
@@ -1274,6 +1444,27 @@ function City.Build(def)
         end
     end
 
+    -- The signs, as copies (placing moves them; the definition stays as
+    -- written). Wall signs go with their side's row, to be placed on a
+    -- building before its windows are laid.
+    local defSigns = {}
+    b.wallSignsBySide = {}
+    for _, sg in ipairs(def.signs or {}) do
+        local c = {}
+        for k, v in pairs(sg) do c[k] = v end
+        c.pos = { sg.pos[1], sg.pos[2], sg.pos[3] }
+        c.normal = { sg.normal[1], sg.normal[2], sg.normal[3] or 0 }
+        defSigns[#defSigns + 1] = c
+        for name, sd in pairs(S) do
+            local nn = sd.axis == "x" and { 0, -sd.out } or { -sd.out, 0 }
+            local plane = sd.axis == "x" and c.pos[2] or c.pos[1]
+            if nn[1] == c.normal[1] and nn[2] == c.normal[2] and math.abs(plane - sd.at) < 200 then
+                b.wallSignsBySide[name] = b.wallSignsBySide[name] or {}
+                table.insert(b.wallSignsBySide[name], c)
+            end
+        end
+    end
+
     b.rows = {}
     for _, key in ipairs({ "north", "south", "west", "east" }) do
         b.group = "front:" .. key
@@ -1298,9 +1489,14 @@ function City.Build(def)
     b.group = "via:piers"
     for i, pr in ipairs(def.piers or {}) do b:pier(pr, pr.name or ("pier" .. i)) end
 
-    for _, sg in ipairs(def.signs or {}) do b.signs[#b.signs + 1] = sg end
+    for _, sg in ipairs(defSigns) do b.signs[#b.signs + 1] = sg end
     b.group = "front:roof"
     for _, bb in ipairs(def.billboards or {}) do b:billboard(bb) end
+    -- every sign's case (and lamps, hangers), now that all are where they go
+    for _, sg in ipairs(b.signs) do
+        b.group = sg.group or (sg.roof and "front:roof" or "front:signs")
+        b:signCase(sg)
+    end
 
     -- last, so the rest of the city is laid out exactly as it was without it
     if def.greenery then b:greenery(def.greenery) end

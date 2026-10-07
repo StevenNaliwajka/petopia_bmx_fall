@@ -726,32 +726,8 @@ local function frame(pw, ph, kind)
         surface.SetDrawColor(245, 245, 245, 255) surface.DrawRect(-pw / 2 - 14, -ph / 2 - 14, pw + 28, ph + 28)
         surface.SetDrawColor(40, 40, 44, 255) surface.DrawRect(-pw / 2 - 4, -ph / 2 - 4, pw + 8, ph + 8)
     end
-    -- the floodlights: hung on the frame's top edge, an even row centred on
-    -- the board, their heads just over the edge where they wash the face
-    -- (they used to float 50 px above it, on long stalks)
-    local edge = -ph / 2 - (kind == "wood" and 22 or kind == "alu" and 8 or 14)
-    local n = pw > 1400 and 5 or 4
-    for i = 1, n do
-        local lx = -pw / 2 + pw * (i - 0.5) / n
-        surface.SetDrawColor(50, 50, 55, 255) surface.DrawRect(lx - 3, edge - 14, 6, 14)
-        surface.SetDrawColor(40, 40, 44, 255) surface.DrawRect(lx - 18, edge - 22, 36, 12)
-        surface.SetDrawColor(255, 245, 205, 255) surface.DrawRect(lx - 15, edge - 12, 30, 4)
-    end
-end
-
--- The floodlights' light on the face: a warm wash fading down the board
--- from each lamp, drawn over the ad so it reads as lit, never washed out.
-local function lampWash(pw, ph)
-    local n = pw > 1400 and 5 or 4
-    for i = 1, n do
-        local lx = -pw / 2 + pw * (i - 0.5) / n
-        local w = pw / n
-        for k = 0, 5 do
-            local f = k / 6
-            surface.SetDrawColor(255, 236, 190, 26 * (1 - f))
-            surface.DrawRect(lx - w * (0.25 + 0.2 * f), -ph / 2 + ph * 0.06 * k, w * (0.5 + 0.4 * f), ph * 0.06 + 1)
-        end
-    end
+    -- (the floodlights are real now: arms and lamp heads on the sign's
+    -- case, sh_city.lua B:signCase)
 end
 
 local function gradient(x, y, w, h, a, b, steps)
@@ -1033,9 +1009,9 @@ local function adSign(s, pw, ph)
     draw.NoTexture()
     local style = s.style or "comic"
     local fn = STYLES[style] or STYLES.comic
-    fn(s, pw, ph, City.AdPicture(s))
-    -- the styles with floodlights (frame() drew the lamps) get their light
-    if style ~= "tv" and style ~= "neon" then lampWash(pw, ph) end
+    -- the picture is taken before the face is painted (drawSigns): never a
+    -- 3D camera inside the face's 2D one
+    fn(s, pw, ph, s._pic)
 end
 
 local function transitSign(s, pw, ph)
@@ -1065,16 +1041,11 @@ local function streetSign(s, pw, ph)
 end
 
 local LOOKS = { ad = adSign, transit = transitSign, street = streetSign }
--- the panel's height in 3D2D pixels for each look (its width follows)
-local PANEL_PX = { ad = 360, transit = 180, street = 170 }
+City.Looks = LOOKS
 
 -- Signs are painted boards, not screens: lit by the light that falls on
--- them, not glowing on their own. Over the board, a shade down to the
--- afternoon's light where it stands (brighter under a street lamp), and on a
--- billboard the warm pools its own lamps throw down its face. Only the board
--- is shaded; the lamp heads over it stay bright. Off with bmx_city_mood 0,
--- or on a map with no mood.
-local GRAD_DOWN
+-- them, not glowing on their own. The afternoon's light where the sign
+-- stands, brighter within reach of a street lamp (layout.mood.signLight).
 function City.SignLight(s, layout)
     local m = layout and layout.mood
     if not m or not m.signLight then return 1 end
@@ -1088,57 +1059,111 @@ function City.SignLight(s, layout)
     return math.min(light, 1)
 end
 
-function City.LightSign(s, pw, ph, layout)
+-- How the face is lit, as colour multipliers for its top and bottom edge
+-- (the face is one quad; the light is in its vertex colours, so it darkens
+-- the artwork the way light does, instead of laying a tint over it -- the
+-- old translucent washes muddied every board and showed seams).
+--   self-lit (a TV screen, neon tubes): full brightness, top to bottom
+--   floodlit: its own lamps over the top edge, fading down the board
+--   otherwise: the light where it stands, a little less at its foot
+-- Pure, for the tests: returns top, bottom (0..1) and a tint {r, g, b}.
+City.SIGN_FLOOD = 0.24
+function City.SignFaceLight(s, layout)
+    local cv = GetConVar and GetConVar("bmx_city_mood")
     local m = layout and layout.mood
-    local cv = GetConVar("bmx_city_mood")
-    if not m or not m.signLight or (cv and not cv:GetBool()) then return end
-    local shade = 1 - City.SignLight(s, layout)
-    local dusk = m.signShadow or { 24, 14, 10 }
-    draw.NoTexture()
-    -- the board takes the light of where it is
-    surface.SetDrawColor(dusk[1], dusk[2], dusk[3], 255 * shade)
-    surface.DrawRect(-pw / 2, -ph / 2, pw, ph)
-    -- and is darker at its foot, furthest from the light above it
-    GRAD_DOWN = GRAD_DOWN or Material("vgui/gradient-u")
-    surface.SetMaterial(GRAD_DOWN)
-    surface.SetDrawColor(dusk[1], dusk[2], dusk[3], 110 * shade)
-    surface.DrawTexturedRect(-pw / 2, -ph / 2, pw, ph)
-    if (s.look or "ad") == "ad" then
-        -- the billboard's four lamps shine down onto it: warm pools from
-        -- the top edge, fading down the face
-        local warm = m.lampColor or { 255, 186, 112 }
-        City._gradDown = City._gradDown or Material("vgui/gradient-d")
-        surface.SetMaterial(City._gradDown)
-        for i = 1, 4 do
-            local lx = -pw / 2 + pw * (i - 0.5) / 4
-            surface.SetDrawColor(warm[1], warm[2], warm[3], 70)
-            surface.DrawTexturedRect(lx - pw * 0.13, -ph / 2, pw * 0.26, ph * 0.7)
-        end
+    if not m or (cv and not cv:GetBool()) then return 1, 1, { 1, 1, 1 } end
+    if (s.look or "ad") == "ad" and (s.style == "tv" or s.style == "neon") then return 1, 1, { 1, 1, 1 } end
+    local L = City.SignLight(s, layout)
+    local top, bottom = L, L * 0.88
+    if City.SignFloodlit(s) then top, bottom = math.min(1, L + City.SIGN_FLOOD), math.min(1, L + City.SIGN_FLOOD * 0.35) end
+    -- the afternoon's warmth, half strength: paint is still its own colour
+    local w = m.light or { 1, 1, 1 }
+    return top, bottom, { (1 + w[1]) / 2, (1 + w[2]) / 2, (1 + w[3]) / 2 }
+end
+
+-- Each sign's artwork is painted once into its own render target (board and
+-- frame, 1:1 in panel pixels) and drawn as the open front of its case. A
+-- face is repainted only when its product photo changes, or ten times a
+-- second for neon (its tubes stutter); at most one repaint a frame.
+City._signRT = City._signRT or {}
+local paintedFrame = -1
+local function signFace(s, i)
+    local F = City.SignFrame(s)
+    local R = City._signRT[s]
+    if not R then
+        local name = "bmxsign_" .. i .. "_" .. tostring(s.text or s.look or "sign"):lower():gsub("[^%w]", "")
+        -- clamped edges (4 + 8) and anisotropic filtering (16): crisp at an angle
+        local rt = GetRenderTargetEx(name, F.rt[1], F.rt[2], RT_SIZE_NO_CHANGE, MATERIAL_RT_DEPTH_SEPARATE,
+            28, 0, IMAGE_FORMAT_RGB888)
+        R = { rt = rt, mat = CreateMaterial(name .. "_face", "UnlitGeneric", {
+            ["$basetexture"] = rt:GetName(), ["$vertexcolor"] = "1", ["$nocull"] = "1" }) }
+        City._signRT[s] = R
     end
+    return R, F
+end
+
+local function paintFace(s, R, F)
+    if s.pic then s._pic = City.AdPicture(s) end
+    local P = City._pics[s]
+    local stamp = tostring(P and P.at or 0) .. (s._pic and "p" or "-")
+    local live = s.style == "neon"
+    if R.stamp == stamp and not (live and RealTime() - (R.at or 0) > 0.1) then return end
+    if R.stamp and paintedFrame == FrameNumber() then return end
+    paintedFrame = FrameNumber()
+    R.stamp, R.at = stamp, RealTime()
+    local k = math.min(1, F.rt[1] / F.ow, F.rt[2] / F.oh)
+    R.u1, R.v1 = F.ow * k / F.rt[1], F.oh * k / F.rt[2]
+    local look = LOOKS[s.look or "ad"] or adSign
+    render.PushRenderTarget(R.rt)
+    render.Clear(38, 38, 42, 255, true, true)
+    cam.Start2D()
+        local m = Matrix()
+        m:Translate(Vector(F.ow * k / 2, F.oh * k / 2, 0))
+        if k < 1 then m:Scale(Vector(k, k, 1)) end
+        cam.PushModelMatrix(m, true)
+            -- one bad sign must not leave the matrix or the target pushed
+            local ok, err = pcall(look, s, F.pw, F.ph)
+        cam.PopModelMatrix()
+    cam.End2D()
+    render.PopRenderTarget()
+    if not ok and not s._err then s._err = true ErrorNoHalt("[BMX] city sign " .. tostring(s.text) .. ": " .. tostring(err) .. "\n") end
+end
+
+-- The face's four corners (TL, TR, BR, BL) in the world: the open front of
+-- the sign's case. Pure, for the tests.
+function City.SignCorners(s)
+    local n, c = s.normal, s.face or s.pos
+    local r = City.SignRight(n)
+    local hw, hh = (s.fw or s.w) / 2, (s.fh or s.h) / 2
+    local function p(a, z) return { c[1] + r[1] * a, c[2] + r[2] * a, c[3] + z } end
+    return { p(-hw, hh), p(hw, hh), p(hw, -hh), p(-hw, -hh) }
 end
 
 local function drawSigns(layout)
     makeFonts()
     local eye = EyePos()
-    for _, s in ipairs(layout.signs) do
-        local n = Vector(s.normal[1], s.normal[2], s.normal[3])
-        local p = Vector(s.pos[1], s.pos[2], s.pos[3])
-        -- only from the front: a sign is one-sided
-        if (eye - p):Dot(n) > 0 then
-            local ang = n:Angle()
-            ang:RotateAroundAxis(ang:Up(), 90)
-            ang:RotateAroundAxis(ang:Forward(), 90)
-            local scale = s.h / (PANEL_PX[s.look] or 360)
-            local pw, ph = s.w / scale, s.h / scale
-            local look = LOOKS[s.look or "ad"] or adSign
-            -- 14 units proud: in front of any cornice (they stick out 8)
-            cam.Start3D2D(p + n * (s.roof and 0.5 or 14), ang, scale)
-                -- one bad sign must not leave the 3D2D camera open (that
-                -- breaks the rest of the frame): report it once, carry on
-                local ok, err = pcall(look, s, pw, ph)
-                if not ok and not s._err then s._err = true ErrorNoHalt("[BMX] city sign " .. tostring(s.text) .. ": " .. tostring(err) .. "\n") end
-                if ok then City.LightSign(s, pw, ph, layout) end
-            cam.End3D2D()
+    for i, s in ipairs(layout.signs) do
+        local n = s.normal
+        local c = s.face or s.pos
+        -- only from the front: behind it is its case
+        if (eye.x - c[1]) * n[1] + (eye.y - c[2]) * n[2] + (eye.z - c[3]) * (n[3] or 0) > 0 then
+            local R, F = signFace(s, i)
+            paintFace(s, R, F)
+            if R.u1 then
+                local top, bottom, tint = City.SignFaceLight(s, layout)
+                local q = City.SignCorners(s)
+                local uv = { { 0, 0 }, { R.u1, 0 }, { R.u1, R.v1 }, { 0, R.v1 } }
+                render.SetMaterial(R.mat)
+                mesh.Begin(MATERIAL_QUADS, 1)
+                for v = 1, 4 do
+                    local k = (v <= 2) and top or bottom
+                    mesh.Position(Vector(q[v][1], q[v][2], q[v][3]))
+                    mesh.TexCoord(0, uv[v][1], uv[v][2])
+                    mesh.Color(255 * k * tint[1], 255 * k * tint[2], 255 * k * tint[3], 255)
+                    mesh.AdvanceVertex()
+                end
+                mesh.End()
+            end
         end
     end
 end
