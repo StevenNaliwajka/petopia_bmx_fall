@@ -46,16 +46,20 @@ function ENT:BuildPhysics()
     if not hulls then return false end
     self:PhysicsInitMultiConvex(hulls)
     self:SetSolid(SOLID_VPHYSICS)
-    -- MOVETYPE_NONE, as it was. MOVETYPE_VPHYSICS (frozen) made the beds stop
-    -- a bike at the kerb, but on the private server two of them were knocked
-    -- out of place -- one tumbled, one flung through the wall and the floor --
-    -- while the trick bot ground their kerbs. Reverted until that is
-    -- understood; a NONE-movetype solid is not in the physics world, so a bike
-    -- can still ride into a bed's kerb (it is the traces that see it).
-    self:SetMoveType(MOVETYPE_NONE)
+    -- MOVETYPE_VPHYSICS, FROZEN -- not NONE. A NONE-movetype entity is not
+    -- simulated as a physics body, so its convexes are never in the physics
+    -- world: traces hit them, but a bike rode straight into a planting bed's
+    -- kerb, its wheels inside the bed's box, and fell (gmod-bmx's
+    -- bmx_test_solid found the same). Tried once before and reverted (d555635):
+    -- beds were knocked out of place, with gmod-bmx before 04141d0, whose bike
+    -- flung what it rode into. With it, on the private server, 14 grinds and
+    -- a lap of the trick bot's show moved no bed by half a unit (watched every
+    -- tick), and every grind on a kerb landed.
+    self:SetMoveType(MOVETYPE_VPHYSICS)
     self:EnableCustomCollisions(true)
     local phys = self:GetPhysicsObject()
     if IsValid(phys) then
+        phys:SetMass(50000)
         phys:EnableMotion(false)
         phys:SetMaterial("metal")
     end
