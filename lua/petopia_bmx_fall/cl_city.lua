@@ -343,35 +343,70 @@ local function carModel(i)
     return m, M
 end
 
--- One looping wheel-rumble channel per train (keyed line:cycle), moved with
--- it and set to its loudness every frame; stopped once it is out of hearing
--- or gone.
+-- One looping wheel-rumble channel per train within hearing (keyed
+-- line:cycle), moved with it and set to its loudness every frame.
+--
+-- The channels are a fixed POOL, opened once and lent to trains: a train
+-- that goes out of hearing gives its channel back silenced and paused, the
+-- next train takes it. Never stop one and open another: the engine keeps
+-- ~7 MB of every channel it ever opened, stopped or not (measured 10-08 on
+-- the marionette client: a new channel a train, ~7 a minute, grew the
+-- 32-bit client ~50 MB a minute until it ran out of address space; a
+-- forced collectgarbage freed none of it).
+City.SOUND_POOL = 4
 City._sounds = City._sounds or {}
+City._soundPool = City._soundPool or {}
+
+local function silence(slot)
+    slot.key = nil
+    local ch = slot.ch
+    if ch and ch:IsValid() then ch:SetVolume(0) ch:Pause() end
+end
+
+local function freeSlot()
+    for _, slot in ipairs(City._soundPool) do
+        if not slot.key then return slot end
+    end
+    if #City._soundPool >= City.SOUND_POOL or not (sound and sound.PlayFile) then return nil end
+    local slot = {}
+    City._soundPool[#City._soundPool + 1] = slot
+    sound.PlayFile(City.TrainSound, "3d noblock", function(ch)
+        if not ch then return end
+        slot.ch = ch
+        ch:EnableLooping(true)
+        ch:Set3DFadeDistance(900, 0)
+        ch:SetVolume(0)
+        if slot.key then
+            ch:SetPos(slot.pos)
+            ch:SetVolume(slot.vol or 0)
+            ch:Play()
+        end
+    end)
+    return slot
+end
+
 local function lineSound(name, pos, on, vol)
     local s = City._sounds[name]
     if not on then
-        if s and s.ch and s.ch:IsValid() then s.ch:Stop() end
+        if s and s.slot.key == name then silence(s.slot) end
         City._sounds[name] = nil
         return
     end
     if not s then
-        s = { pending = true }
+        local slot = freeSlot()
+        if not slot then return end   -- every channel is lent: this train runs quiet
+        slot.key = name
+        s = { slot = slot }
         City._sounds[name] = s
-        if sound and sound.PlayFile then
-            sound.PlayFile(City.TrainSound, "3d noblock", function(ch)
-                if not ch then return end
-                if City._sounds[name] ~= s then ch:Stop() return end
-                s.ch = ch
-                ch:EnableLooping(true)
-                ch:Set3DFadeDistance(900, 0)
-                ch:SetVolume(s.vol or 0)
-                ch:SetPos(s.pos or pos)
-                ch:Play()
-            end)
-        end
     end
-    s.pos, s.vol = pos, vol or 1
-    if s.ch and s.ch:IsValid() then s.ch:SetPos(pos) s.ch:SetVolume(s.vol) end
+    local slot = s.slot
+    slot.pos, slot.vol = pos, vol or 1
+    local ch = slot.ch
+    if ch and ch:IsValid() then
+        ch:SetPos(pos)
+        ch:SetVolume(slot.vol)
+        if ch:GetState() ~= GMOD_CHANNEL_PLAYING then ch:Play() end
+    end
 end
 
 -- Draw every train on every line at time t, and keep its sound with it. A

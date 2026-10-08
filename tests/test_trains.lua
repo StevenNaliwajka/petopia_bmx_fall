@@ -53,8 +53,9 @@ local function trainClient(models)
         if models == "base" and path == outro then return false end
         return path:find("^models/") ~= nil
     end
-    -- sound: one recorded channel per PlayFile, played at once
+    -- sound: one recorded channel per PlayFile, handed over at once
     local S = { channels = {}, horns = {} }
+    env.GMOD_CHANNEL_STOPPED, env.GMOD_CHANNEL_PLAYING, env.GMOD_CHANNEL_PAUSED = 0, 1, 2
     env.sound = {
         PlayFile = function(path, flags, cb)
             local ch = { path = path, flags = flags, playing = false, stopped = false, vol = nil }
@@ -64,6 +65,8 @@ local function trainClient(models)
             function ch:SetVolume(v) self.vol = v end
             function ch:SetPos(p) self.pos = p end
             function ch:Play() self.playing = true end
+            function ch:Pause() self.playing = false end
+            function ch:GetState() return self.playing and 1 or 0 end
             function ch:Stop() self.playing = false self.stopped = true end
             S.channels[#S.channels + 1] = ch
             cb(ch)
@@ -277,7 +280,7 @@ T.test("the rumble rides the train: heard where the train is, loud over the park
     end
 end)
 
-T.test("on the client the rumble starts with the train, follows it, and stops when it goes", function()
+T.test("on the client the rumble starts with the train, follows it, and goes quiet when it goes", function()
     local City, L, frame, S, live = trainClient("all")
     local l = L.lines[1]
     -- line1's train 0, from far off to far off: a channel for it plays only
@@ -286,7 +289,7 @@ T.test("on the client the rumble starts with the train, follows it, and stops wh
     local key = l.name .. ":0"
     local function chan()
         local s = City._sounds[key]
-        return s and s.ch
+        return s and s.slot.ch
     end
     frame(l.offset + 0.5)
     T.eq(chan(), nil, "no channel while it is far out past the city")
@@ -306,9 +309,12 @@ T.test("on the client the rumble starts with the train, follows it, and stops wh
     frame(tMid + 2)
     T.ok(ch.playing, "still playing")
     T.ok(ch.pos.y > y0, "moved with the train")
-    -- gone far out of hearing: stopped
+    -- gone far out of hearing: silenced and paused, kept for the next train
+    -- (a stopped channel's memory is never given back: see SOUND_POOL)
     frame(l.offset + st0.run - 1)
-    T.ok(not ch.playing and ch.stopped, "stopped once it is out of hearing")
+    T.eq(chan(), nil, "no longer this train's")
+    T.ok(not ch.playing and not ch.stopped, "paused once it is out of hearing, not stopped")
+    T.eq(ch.vol, 0, "and silent")
     -- the horn sounded once for train 0, near the wall, and only once
     local horns = 0
     for _, h in ipairs(S.horns) do
@@ -316,6 +322,18 @@ T.test("on the client the rumble starts with the train, follows it, and stops wh
     end
     T.eq(horns, 1, "one horn for train 0's run")
     -- and no channel plays silent: every live channel is a train within hearing
+    for _, c in ipairs(live()) do T.ok(c.vol > 0, "a live channel is heard") end
+end)
+
+T.test("the rumble reuses a few channels for every train, never opening one a run", function()
+    local City, L, frame, S, live = trainClient("all")
+    local l = L.lines[1]
+    -- an hour of trains on every line, a frame every half second
+    for t = l.offset, l.offset + 3600, 0.5 do frame(t) end
+    T.ok(#S.channels > 0, "the trains were heard")
+    T.ok(#S.channels <= City.SOUND_POOL, "at most SOUND_POOL channels opened (" .. #S.channels .. ")")
+    for _, ch in ipairs(S.channels) do T.ok(not ch.stopped, "none stopped: a stopped channel's memory is lost") end
+    -- and a lent channel is the train it plays for: heard, at the train
     for _, c in ipairs(live()) do T.ok(c.vol > 0, "a live channel is heard") end
 end)
 
