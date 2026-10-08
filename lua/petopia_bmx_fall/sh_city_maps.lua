@@ -395,6 +395,12 @@ end
 ramps[#ramps + 1] = { "kicker", -40, -560, 152, -150, 64, 254 }
 ramps[#ramps + 1] = { "pipe", 3288, -300, 3292, 20, 64, 82 }
 fall.ramps = ramps
+-- The far south bed (x 2990..3250) is the one a bike comes at past funbox 3
+-- with a quarter pipe at its end: at 20 u its kerb clipped the front wheel of
+-- a hop meant to land on its edge. Its kerb is 14 u.
+for _, bd in ipairs(fall.greenery.beds) do
+    if bd.side == "south" and bd.from == 2990 then bd.kerb = 14 end
+end
 BMX.City.Maps.petopia_bmx_fall = fall
 -- The test server (test-gmod) runs the same BSP under its own name, so a
 -- player's downloaded copy of one never clashes with the other's ("your map

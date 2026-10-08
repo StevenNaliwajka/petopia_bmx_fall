@@ -1668,7 +1668,7 @@ end
 
 function B:bed(S, bd, g, rng, keep, name)
     local z0 = self.def.ground
-    local kerb = g.kerb or 20
+    local kerb = bd.kerb or g.kerb or 20     -- a bed may have its own (a lower kerb is easier to hop onto)
     local depth = bd.depth
     local inset = self.def.frontage and self.def.frontage.inset or 4
     local dIn, dOut = -depth, -inset
@@ -1716,11 +1716,14 @@ function B:bed(S, bd, g, rng, keep, name)
                 -- the kerb short, and on a short bed left too little kerb to
                 -- grind at all (2026-10-08)
                 local x, y = wallXY(S, a, dIn + 30)
-                self:plant("lamp", x, y, soil, yaw, 1)
+                -- (at the standard kerb's height whatever this bed's kerb: the
+                -- lamp heads are baked lights in the map, mapsrc/city_lamps.txt)
+                local lampSoil = z0 + (g.kerb or 20) - 4
+                self:plant("lamp", x, y, lampSoil, yaw, 1)
                 self:solid(name, x - 10, y - 10, z0 + kerb, x + 10, y + 10, z0 + 440)
                 local L = City.LAMP
-                self.lamps[#self.lamps + 1] = { x = x, y = y, z = soil,
-                    head = { x + nrm[1] * L.reach, y + nrm[2] * L.reach, soil + L.height } }
+                self.lamps[#self.lamps + 1] = { x = x, y = y, z = lampSoil,
+                    head = { x + nrm[1] * L.reach, y + nrm[2] * L.reach, lampSoil + L.height } }
                 lampAt[#lampAt + 1] = a
             end
         end
