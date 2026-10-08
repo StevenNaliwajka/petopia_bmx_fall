@@ -1,0 +1,26 @@
+name: Suggestion
+description: A spot, a ramp, a line or a look you would like in the map.
+labels: ["suggestion"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: One idea per issue works best.
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where in the map?
+      description: Type `getpos` in the console at the spot and paste it, or describe the place.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: example
+    attributes:
+      label: Example
+      description: A picture, video or link to a park or map that does it well.
+    validations:
+      required: false

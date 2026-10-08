@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in the Petopia BMX Fall map or its city is wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. This is the Petopia BMX Fall map. A bug in how a bike rides
+        belongs on [gmod-bmx](https://github.com/StevenNaliwajka/gmod-bmx/issues),
+        and a bug in games or scores on
+        [gmod-bmx-mode](https://github.com/StevenNaliwajka/gmod-bmx-mode/issues).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - Stuck, falling through, or an invisible wall
+        - A ramp, rail or ledge that does not ride right
+        - Looks wrong (missing texture, flicker, lighting)
+        - Slow (low FPS)
+        - Map differs, or download problems
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where?
+      description: Type `getpos` in the console at the spot and paste it, or describe the place.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: A screenshot or video helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: settings
+    attributes:
+      label: Graphics settings (for looks or FPS problems)
+      placeholder: High, 1920x1080, DX9
+    validations:
+      required: false
