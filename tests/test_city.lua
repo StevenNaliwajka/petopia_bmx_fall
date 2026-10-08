@@ -270,6 +270,11 @@ T.test("on gm_skatepark the server spawns one collider per solid, boxes intact",
         T.ok(s, "named " .. e:GetSolidName())
         local phys = e:GetPhysicsObject()
         T.ok(phys and phys ~= nil and e._phys, e:GetSolidName() .. " has a body")
+        -- REALLY frozen: a material set after EnableMotion(false) thaws the
+        -- body inside VPhysics (the shim's `thawed`), and a bike then pushes
+        -- the kerb away and rides into it. Older addon shims have no `thawed`.
+        T.eq(e._phys.motion, false, e:GetSolidName() .. " frozen")
+        T.ok(not e._phys.thawed, e:GetSolidName() .. " material set before the freeze, not after")
         T.eq(#e._phys.boxes, #s.boxes, e:GetSolidName() .. " box count")
         -- entity-space boxes back in world space are the layout's boxes
         local o = e:GetPos()

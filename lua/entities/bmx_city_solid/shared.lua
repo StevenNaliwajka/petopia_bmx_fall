@@ -46,22 +46,28 @@ function ENT:BuildPhysics()
     if not hulls then return false end
     self:PhysicsInitMultiConvex(hulls)
     self:SetSolid(SOLID_VPHYSICS)
-    -- MOVETYPE_VPHYSICS, FROZEN -- not NONE. A NONE-movetype entity is not
-    -- simulated as a physics body, so its convexes are never in the physics
-    -- world: traces hit them, but a bike rode straight into a planting bed's
-    -- kerb, its wheels inside the bed's box, and fell (gmod-bmx's
-    -- bmx_test_solid found the same). Tried once before and reverted (d555635):
-    -- beds were knocked out of place, with gmod-bmx before 04141d0, whose bike
-    -- flung what it rode into. With it, on the private server, 14 grinds and
-    -- a lap of the trick bot's show moved no bed by half a unit (watched every
-    -- tick), and every grind on a kerb landed.
+    -- MOVETYPE_VPHYSICS: the entity follows its body, so what traces hit and
+    -- what the bike's hull meets are the same place.
     self:SetMoveType(MOVETYPE_VPHYSICS)
     self:EnableCustomCollisions(true)
     local phys = self:GetPhysicsObject()
     if IsValid(phys) then
+        -- THE MATERIAL FIRST, THEN FREEZE. PhysObj:SetMaterial on a body that
+        -- is already frozen THAWS it inside VPhysics, while IsMotionEnabled()
+        -- goes on saying false: measured on a real server, a bike pressing a
+        -- pier's plinth at walking pace pushed this 50,000 kg "frozen" body
+        -- 3-6 u per ride (at 500 kg, 100-160 u), and with the material set
+        -- before EnableMotion(false) -- or not at all -- 0.00. That was the
+        -- whole story of the bike riding into the kerbs: under MOVETYPE_NONE
+        -- the thawed body was shoved out from under the entity (traces still
+        -- hit the kerb, the hull went into it, the wheels sank and the bike
+        -- fell); under MOVETYPE_VPHYSICS the entity went with it (beds
+        -- knocked out of place, d555635). bmx_test_solid and bmx_park_piece
+        -- always had this order, which is why no headless case ever saw it.
+        phys:SetMaterial("metal")
         phys:SetMass(50000)
         phys:EnableMotion(false)
-        phys:SetMaterial("metal")
+        phys:Sleep()
     end
     self._built = true
     return true
