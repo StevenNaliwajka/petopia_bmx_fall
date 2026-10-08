@@ -69,13 +69,17 @@ RAMPS = [
     ("flatramp",     -161,   481,  193,   767, 177, "+y"),
     ("quarterpipe3",  187,   475,  807,   774, 237, "+y"),
     ("halfpipe7",     324, -1037, 1515,  -468, 421, "x"),
-    ("flatramp",      559, -1791,  913, -1505, 177, "-y"),
+    # THE SOUTH LANE (2026-10-08, owner's call): three ramps stood against the
+    # planting beds on the south wall, so no bike could line up on those beds'
+    # kerbs to grind them. Each is moved north into open floor (the flat ramp
+    # 250, the spine 280, funbox 3 200), leaving a lane along the wall.
+    ("flatramp",      559, -1541,  913, -1255, 177, "-y"),
     ("funbox2",       572,  -259, 1118,   222, 150, None),
     ("quarterpipe3",  811,   475, 1431,   774, 237, "+y"),
-    ("spiner2",      1386, -1703, 1963, -1327, 179, "y"),
+    ("spiner2",      1386, -1423, 1963, -1047, 179, "y"),
     ("funbox2",      1855,  -290, 2401,   191, 150, None),
     ("flatramp",     2151, -1009, 2437,  -655, 177, "+y"),
-    ("funbox2",      2398, -1776, 2944, -1295, 150, None),
+    ("funbox2",      2398, -1576, 2944, -1095, 150, None),
     ("spiner2",      2437, -1082, 2812,  -505, 179, "x"),
     ("spiner2",      2805, -1082, 3180,  -505, 179, "x"),
     # THE FLIP KICKER AND THE LOW PIPE (2026-10-07, owner's call). Nothing in

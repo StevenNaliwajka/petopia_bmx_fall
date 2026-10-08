@@ -364,8 +364,39 @@ BMX.City.Maps.gm_skatepark = {
 
 -- The same park, renamed for its autumn edition: the server runs a copy of
 -- gm_skatepark's BSP as petopia_bmx_fall (docs/CITY.md, "The map").
-BMX.City.Maps.petopia_bmx_fall = BMX.City.Maps.gm_skatepark
+-- petopia_bmx_fall is gm_skatepark's layout with its own changes to the ramps
+-- (mapsrc/build_vmf.py RAMPS): rail2 is gone (a low pipe on the east side
+-- instead), a flip kicker stands west of the halfpipe, and three ramps moved
+-- north off the south wall's planting beds. The shop fronts read this list (a
+-- ramp by a wall gets plain wall behind it), so it is the map's own, not
+-- gm_skatepark's.
+local function copy(t)
+    if type(t) ~= "table" then return t end
+    local o = {}
+    for k, v in pairs(t) do o[k] = copy(v) end
+    return o
+end
+local fall = copy(BMX.City.Maps.gm_skatepark)
+local moved = {
+    -- name, x0 (which one), new y0, new y1
+    { "flatramp", 559, -1541, -1255 },
+    { "spiner2", 1386, -1423, -1047 },
+    { "funbox2", 2398, -1576, -1095 },
+}
+local ramps = {}
+for _, r in ipairs(fall.ramps) do
+    if r[1] ~= "rail2" then
+        for _, m in ipairs(moved) do
+            if r[1] == m[1] and r[2] == m[2] then r[3], r[5] = m[3], m[4] end
+        end
+        ramps[#ramps + 1] = r
+    end
+end
+ramps[#ramps + 1] = { "kicker", -40, -560, 152, -150, 64, 254 }
+ramps[#ramps + 1] = { "pipe", 3288, -300, 3292, 20, 64, 82 }
+fall.ramps = ramps
+BMX.City.Maps.petopia_bmx_fall = fall
 -- The test server (test-gmod) runs the same BSP under its own name, so a
 -- player's downloaded copy of one never clashes with the other's ("your map
 -- differs from the server's"): tools/deploy-test.sh renames it on the way in.
-BMX.City.Maps.test_petopia_bmx_fall = BMX.City.Maps.gm_skatepark
+BMX.City.Maps.test_petopia_bmx_fall = fall

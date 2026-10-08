@@ -741,15 +741,38 @@ T.test("falling leaves: drift east and down, lie a while, then go", function()
     T.eq(#leaves, 0, "gone after lying a while")
 end)
 
-T.test("petopia_bmx_fall is gm_skatepark's city under the autumn map's name", function()
+T.test("petopia_bmx_fall is gm_skatepark's city under the autumn map's name, with the map's own ramps", function()
     local City = city()
-    T.ok(City.Maps.petopia_bmx_fall == City.Maps.gm_skatepark, "same definition")
+    local fall, sk = City.Maps.petopia_bmx_fall, City.Maps.gm_skatepark
+    T.eq(#fall.greenery.beds, #sk.greenery.beds, "the same beds")
+    local names = {}
+    for _, r in ipairs(fall.ramps) do names[r[1]] = (names[r[1]] or 0) + 1 end
+    T.eq(names.rail2, nil, "no 75 u rail2")
+    T.eq(names.kicker, 1, "the flip kicker")
+    T.eq(names.pipe, 1, "the low pipe")
+    -- the three moved north off the south wall's beds, the same as the BSP
+    local function find(n, x0) for _, r in ipairs(fall.ramps) do if r[1] == n and r[2] == x0 then return r end end end
+    T.eq(find("flatramp", 559)[3], -1541, "the flat ramp moved north")
+    T.eq(find("spiner2", 1386)[3], -1423, "the spine moved north")
+    T.eq(find("funbox2", 2398)[3], -1576, "funbox 3 moved north")
+    -- and the beds they stood against have a lane in front: every ramp within
+    -- in front of such a bed leaves 120 u of floor before its kerb (y -1704)
+    for _, b in ipairs(fall.greenery.beds) do
+        if b.side == "south" and b.from >= 900 then
+            for _, r in ipairs(fall.ramps) do
+                if r[2] < b.to and r[4] > b.from then
+                    T.ok(r[3] >= -1704 + 120, string.format("%s at x %d leaves a lane before the bed at %d..%d (y0 %d)",
+                        r[1], r[2], b.from, b.to, r[3]))
+                end
+            end
+        end
+    end
     T.ok(City.Maps.petopia_bmx_fall.mood and City.Maps.petopia_bmx_fall.mood.sky, "with its late-autumn mood")
 end)
 
 T.test("the test server's map, test_petopia_bmx_fall, is the same city under its own name, and is deployed as that", function()
     local City = city()
-    T.ok(City.Maps.test_petopia_bmx_fall == City.Maps.gm_skatepark, "same definition")
+    T.ok(City.Maps.test_petopia_bmx_fall == City.Maps.petopia_bmx_fall, "same definition as petopia_bmx_fall")
     -- tools/deploy-test.sh renames the BSP, its navmesh and its thumbnail, and
     -- checks the server's systemd drop-in names the same map
     local here = debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$") or "tests"
