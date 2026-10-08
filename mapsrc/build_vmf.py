@@ -62,6 +62,8 @@ BLOOM = 0.15
 #   flatramp:    facing = the side the deck is on
 #   spiner:      facing = "x" or "y", the axis the slopes run along
 #   halfpipe:    facing = "x" or "y", the axis the transitions run along
+#   kicker:      facing = the side the lip is on (a wedge, its back a drop)
+#   pipe:        a grind pipe along the footprint's long side, its top at ztop
 RAMPS = [
     ("spiner2",      -221, -1785,  155, -1208, 179, "x"),
     ("flatramp",     -161,   481,  193,   767, 177, "+y"),
@@ -76,7 +78,18 @@ RAMPS = [
     ("funbox2",      2398, -1776, 2944, -1295, 150, None),
     ("spiner2",      2437, -1082, 2812,  -505, 179, "x"),
     ("spiner2",      2805, -1082, 3180,  -505, 179, "x"),
-    ("rail2",        2914,  -342, 3230,  -330, 139, None),
+    # THE FLIP KICKER AND THE LOW PIPE (2026-10-07, owner's call). Nothing in
+    # gm_skatepark's footprint list gave a flip's air (a funbox's hop is 0.85 s;
+    # a flip needs 1.1 s, a barrel roll 1.2) or a pipe a bunny hop reaches (its
+    # rail stood 75 u up; a hop is ~42). Both measured on a prototype first:
+    # 190 u at 25 degrees gave 1.17-1.26 s and landed a backflip, a 360 and a
+    # barrel roll; a 4 u pipe with its top 18 u up took two crank grinds in two.
+    # The kicker stands in the open strip west of the halfpipe, run at from the
+    # spine's end; the pipe in the open lane between the east tables and the
+    # east bed, run at from the quarter pipe's end. (rail2's old place in front
+    # of the east table is empty now.)
+    ("kicker",        -40,  -560,  152,  -150, 254, "+y"),
+    ("pipe",         3288,  -300, 3292,    20,  82, None),
     ("flatramp",     2929,  -257, 3215,    97, 177, "+y"),
     ("flatramp",     2929,    95, 3215,   449, 177, "-y"),
     ("quarterpipe3", 3291, -1687, 3590, -1067, 237, "+x"),
@@ -313,6 +326,28 @@ def rail(out, x0, y0, x1, y1, zt):
         out.append(box(px - 3, cy - 3, FLOOR, px + 3, cy + 3, zt - 7, MAT_METAL))
 
 
+def kicker(out, x0, y0, x1, y1, zt, facing):
+    L, w0, w1, place = frame(x0, y0, x1, y1, facing)
+    out.append(prism([(0, FLOOR), (L, FLOOR), (L, zt)], place, w0, w1, side_mats({2})))
+
+
+def pipe(out, x0, y0, x1, y1, zt):
+    """A square grind pipe, 4 u across, along the footprint's long side, on
+    two thin posts 20 u in from its ends. Square, not octagonal: the grind
+    takes anything under 6 u across as a pipe (a crank grind), and an
+    octagon this small does not survive the integer grid."""
+    along_y = (y1 - y0) >= (x1 - x0)
+    out.append(box(x0, y0, zt - 4, x1, y1, zt, MAT_METAL))
+    if along_y:
+        cx = (x0 + x1) // 2
+        for py in (y0 + 20, y1 - 22):
+            out.append(box(cx - 1, py, FLOOR, cx + 1, py + 2, zt - 4, MAT_METAL))
+    else:
+        cy = (y0 + y1) // 2
+        for px in (x0 + 20, x1 - 22):
+            out.append(box(px, cy - 1, FLOOR, px + 2, cy + 1, zt - 4, MAT_METAL))
+
+
 def clamp(x0, y0, x1, y1):
     return max(x0, BOX[0]), max(y0, BOX[1]), min(x1, BOX[2]), min(y1, BOX[3])
 
@@ -333,6 +368,10 @@ def ramps():
             funbox(out, x0, y0, x1, y1, zt)
         elif name.startswith("rail"):
             rail(out, x0, y0, x1, y1, zt)
+        elif name.startswith("kicker"):
+            kicker(out, x0, y0, x1, y1, zt, f)
+        elif name.startswith("pipe"):
+            pipe(out, x0, y0, x1, y1, zt)
         else:
             raise ValueError(name)
     return out
