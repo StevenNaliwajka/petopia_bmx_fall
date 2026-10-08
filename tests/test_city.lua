@@ -754,7 +754,7 @@ T.test("petopia_bmx_fall is gm_skatepark's city under the autumn map's name, wit
     local function find(n, x0) for _, r in ipairs(fall.ramps) do if r[1] == n and r[2] == x0 then return r end end end
     T.eq(find("flatramp", 559)[3], -1541, "the flat ramp moved north")
     T.eq(find("spiner2", 1386)[3], -1423, "the spine moved north")
-    T.eq(find("funbox2", 2398)[3], -1576, "funbox 3 moved north")
+    T.eq(find("funbox2", 2398)[3], -1516, "funbox 3 moved north, and shallower")
     -- and the beds they stood against have a lane in front: every ramp within
     -- in front of such a bed leaves 120 u of floor before its kerb (y -1704)
     for _, b in ipairs(fall.greenery.beds) do

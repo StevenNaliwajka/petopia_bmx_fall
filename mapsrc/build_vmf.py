@@ -54,6 +54,11 @@ LAMP_HALF, LAMP_ZERO = 260, 640  # their falloff, units
 FILL = "236 214 196 60"
 FILL_HALF, FILL_ZERO = 420, 1100
 FILL_AT = [(BOX[0] + 112, y, 440) for y in range(BOX[1] + 128, BOX[3], 384)]
+# ...and along the south lane (the ramps moved north off the south wall's beds,
+# 2026-10-08): their backs now face the wall across a lane, in shade the sun
+# never reaches; without these the flat ramp's back read too dark.
+SOUTH_FILL = "236 214 196 14"      # far dimmer than FILL: they stand near the floor
+SOUTH_FILL_AT = [(x, BOX[1] + 150, 160) for x in (700, 1150, 1700, 2180, 2670, 3100)]   # below the decks (177): the backs, not the tops
 EXPOSURE = (0.6, 1.1)            # HDR auto-exposure clamp
 BLOOM = 0.15
 
@@ -79,7 +84,7 @@ RAMPS = [
     ("spiner2",      1386, -1423, 1963, -1047, 179, "y"),
     ("funbox2",      1855,  -290, 2401,   191, 150, None),
     ("flatramp",     2151, -1009, 2437,  -655, 177, "+y"),
-    ("funbox2",      2398, -1576, 2944, -1095, 150, None),
+    ("funbox2",      2398, -1516, 2944, -1095, 150, None),   # and 60 u shallower: the far south bed's lane
     ("spiner2",      2437, -1082, 2812,  -505, 179, "x"),
     ("spiner2",      2805, -1082, 3180,  -505, 179, "x"),
     # THE FLIP KICKER AND THE LOW PIPE (2026-10-07, owner's call). Nothing in
@@ -451,6 +456,10 @@ def entities(ids):
                        _fifty_percent_distance=str(LAMP_HALF), _zero_percent_distance=str(LAMP_ZERO)))
     for x, y, z in FILL_AT:
         out.append(ent(ids, "light", origin="%d %d %d" % (x, y, z), _light=FILL,
+                       _lightHDR="-1 -1 -1 1", _lightscaleHDR="1", style="0",
+                       _fifty_percent_distance=str(FILL_HALF), _zero_percent_distance=str(FILL_ZERO)))
+    for x, y, z in SOUTH_FILL_AT:
+        out.append(ent(ids, "light", origin="%d %d %d" % (x, y, z), _light=SOUTH_FILL,
                        _lightHDR="-1 -1 -1 1", _lightscaleHDR="1", style="0",
                        _fifty_percent_distance=str(FILL_HALF), _zero_percent_distance=str(FILL_ZERO)))
     out.append(ent(ids, "env_fog_controller", origin="1664 -512 1400", fogenable="1",

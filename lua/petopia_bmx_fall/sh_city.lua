@@ -1710,9 +1710,12 @@ function B:bed(S, bd, g, rng, keep, name)
             end
             if at then
                 a = at
-                -- at the kerb, as a street's lamps stand: the shop fronts'
-                -- awnings reach out over the bed behind them
-                local x, y = wallXY(S, a, dIn + 18)
+                -- near the kerb, as a street's lamps stand (the shop fronts'
+                -- awnings reach out over the bed behind them) -- but 30 u in,
+                -- not 18: a pole that near the edge cut every peg grind along
+                -- the kerb short, and on a short bed left too little kerb to
+                -- grind at all (2026-10-08)
+                local x, y = wallXY(S, a, dIn + 30)
                 self:plant("lamp", x, y, soil, yaw, 1)
                 self:solid(name, x - 10, y - 10, z0 + kerb, x + 10, y + 10, z0 + 440)
                 local L = City.LAMP

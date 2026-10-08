@@ -6604,7 +6604,7 @@ solid
 	side
 	{
 		"id" "660"
-		"plane" "(2816 -1223 150) (2816 -1448 150) (2526 -1448 150)"
+		"plane" "(2816 -1223 150) (2816 -1388 150) (2526 -1388 150)"
 		"material" "CONCRETE/CONCRETEWALL004A"
 		"uaxis" "[1 0 0 0] 0.25"
 		"vaxis" "[0 -1 0 0] 0.25"
@@ -6615,7 +6615,7 @@ solid
 	side
 	{
 		"id" "661"
-		"plane" "(2398 -1576 64) (2944 -1576 64) (2944 -1095 64)"
+		"plane" "(2398 -1516 64) (2944 -1516 64) (2944 -1095 64)"
 		"material" "TOOLS/TOOLSNODRAW"
 		"uaxis" "[1 0 0 0] 0.25"
 		"vaxis" "[0 -1 0 0] 0.25"
@@ -6626,7 +6626,7 @@ solid
 	side
 	{
 		"id" "662"
-		"plane" "(2816 -1448 150) (2944 -1576 64) (2398 -1576 64)"
+		"plane" "(2816 -1388 150) (2944 -1516 64) (2398 -1516 64)"
 		"material" "WOOD/WOODFLOOR005A"
 		"uaxis" "[1 0 0 0] 0.25"
 		"vaxis" "[0 -1 0 0] 0.25"
@@ -6637,7 +6637,7 @@ solid
 	side
 	{
 		"id" "663"
-		"plane" "(2816 -1223 150) (2944 -1095 64) (2944 -1576 64)"
+		"plane" "(2816 -1223 150) (2944 -1095 64) (2944 -1516 64)"
 		"material" "WOOD/WOODFLOOR005A"
 		"uaxis" "[1 0 0 0] 0.25"
 		"vaxis" "[0 -1 0 0] 0.25"
@@ -6659,7 +6659,7 @@ solid
 	side
 	{
 		"id" "665"
-		"plane" "(2526 -1448 150) (2398 -1576 64) (2398 -1095 64)"
+		"plane" "(2526 -1388 150) (2398 -1516 64) (2398 -1095 64)"
 		"material" "WOOD/WOODFLOOR005A"
 		"uaxis" "[1 0 0 0] 0.25"
 		"vaxis" "[0 -1 0 0] 0.25"
@@ -10442,7 +10442,7 @@ entity
 {
 	"id" "1045"
 	"classname" "light"
-	"origin" "1743 611 494"
+	"origin" "1743 623 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10454,7 +10454,7 @@ entity
 {
 	"id" "1046"
 	"classname" "light"
-	"origin" "2429 611 494"
+	"origin" "2429 623 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10466,7 +10466,7 @@ entity
 {
 	"id" "1047"
 	"classname" "light"
-	"origin" "2795 611 494"
+	"origin" "2795 623 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10478,7 +10478,7 @@ entity
 {
 	"id" "1048"
 	"classname" "light"
-	"origin" "3321 611 494"
+	"origin" "3321 623 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10490,7 +10490,7 @@ entity
 {
 	"id" "1049"
 	"classname" "light"
-	"origin" "358 -1635 494"
+	"origin" "358 -1647 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10502,7 +10502,7 @@ entity
 {
 	"id" "1050"
 	"classname" "light"
-	"origin" "1150 -1635 494"
+	"origin" "1150 -1647 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10514,7 +10514,7 @@ entity
 {
 	"id" "1051"
 	"classname" "light"
-	"origin" "2180 -1635 494"
+	"origin" "2180 -1647 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10526,7 +10526,7 @@ entity
 {
 	"id" "1052"
 	"classname" "light"
-	"origin" "3120 -1635 494"
+	"origin" "3120 -1647 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10538,7 +10538,7 @@ entity
 {
 	"id" "1053"
 	"classname" "light"
-	"origin" "-99 -613 494"
+	"origin" "-111 -613 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10550,7 +10550,7 @@ entity
 {
 	"id" "1054"
 	"classname" "light"
-	"origin" "-99 -200 494"
+	"origin" "-111 -200 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10562,7 +10562,7 @@ entity
 {
 	"id" "1055"
 	"classname" "light"
-	"origin" "-99 173 494"
+	"origin" "-111 173 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10574,7 +10574,7 @@ entity
 {
 	"id" "1056"
 	"classname" "light"
-	"origin" "3427 -738 494"
+	"origin" "3439 -738 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10586,7 +10586,7 @@ entity
 {
 	"id" "1057"
 	"classname" "light"
-	"origin" "3427 -174 494"
+	"origin" "3439 -174 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10598,7 +10598,7 @@ entity
 {
 	"id" "1058"
 	"classname" "light"
-	"origin" "3427 390 494"
+	"origin" "3439 390 494"
 	"_light" "255 186 112 260"
 	"_lightHDR" "-1 -1 -1 1"
 	"_lightscaleHDR" "1"
@@ -10693,6 +10693,78 @@ entity
 entity
 {
 	"id" "1066"
+	"classname" "light"
+	"origin" "700 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1067"
+	"classname" "light"
+	"origin" "1150 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1068"
+	"classname" "light"
+	"origin" "1700 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1069"
+	"classname" "light"
+	"origin" "2180 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1070"
+	"classname" "light"
+	"origin" "2670 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1071"
+	"classname" "light"
+	"origin" "3100 -1642 160"
+	"_light" "236 214 196 14"
+	"_lightHDR" "-1 -1 -1 1"
+	"_lightscaleHDR" "1"
+	"style" "0"
+	"_fifty_percent_distance" "420"
+	"_zero_percent_distance" "1100"
+}
+entity
+{
+	"id" "1072"
 	"classname" "env_fog_controller"
 	"origin" "1664 -512 1400"
 	"fogenable" "1"
@@ -10707,7 +10779,7 @@ entity
 }
 entity
 {
-	"id" "1067"
+	"id" "1073"
 	"classname" "shadow_control"
 	"origin" "1664 -512 1300"
 	"angles" "62 0 0"
@@ -10716,14 +10788,14 @@ entity
 }
 entity
 {
-	"id" "1068"
+	"id" "1074"
 	"classname" "env_tonemap_controller"
 	"origin" "1664 -512 1200"
 	"targetname" "tonemap"
 }
 entity
 {
-	"id" "1069"
+	"id" "1075"
 	"classname" "logic_auto"
 	"origin" "1664 -512 1100"
 	"spawnflags" "0"

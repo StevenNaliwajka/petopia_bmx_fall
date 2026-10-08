@@ -381,7 +381,7 @@ local moved = {
     -- name, x0 (which one), new y0, new y1
     { "flatramp", 559, -1541, -1255 },
     { "spiner2", 1386, -1423, -1047 },
-    { "funbox2", 2398, -1576, -1095 },
+    { "funbox2", 2398, -1516, -1095 },
 }
 local ramps = {}
 for _, r in ipairs(fall.ramps) do
