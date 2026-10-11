@@ -52,7 +52,7 @@ City.TrainHorn = "ambient/alarms/train_horn_distant1.wav"
 
 -- At most this many quads in one IMesh. Well under the vertex ceiling a single
 -- mesh can hold, so no map's city can ever overflow one.
-local QUADS_PER_MESH = 4000
+local QUADS_PER_MESH = 1024     -- (was 4000: one mesh is built in one go, between yields)
 
 --------------------------------------------------------------------------
 -- Materials
@@ -110,6 +110,7 @@ function City.BuildMeshes(layout)
                 order[#order + 1] = b
             end
             b.quads[#b.quads + 1] = q
+            City.Slice(0.2)
             for c = 0, 3 do
                 for a = 1, 3 do
                     local v = q[c * 3 + a]
@@ -166,6 +167,7 @@ function City.BuildMeshes(layout)
             out[#out + 1] = { mesh = m, mat = mat, key = b.key, group = b.group, quads = n,
                               center = Vector(cx, cy, cz), radius = math.sqrt(dx * dx + dy * dy + dz * dz) }
             i = i + n
+            City.Slice(n)                -- between meshes, never inside one
         end
     end
     City.meshes = out
@@ -603,6 +605,7 @@ function City.BuildPlants(layout)
     for _, p in ipairs(out) do
         plantModel(p.kind)
         if not p.still then crownMesh(p.kind, mood) end
+        City.Slice(8)
     end
     return out
 end
@@ -1730,10 +1733,57 @@ function City.ClientBuild()
     City.BuildMeshes(L)
     City.BuildPlants(L)
     local ms = ((SysTime and SysTime() or 0) - t0) * 1000
-    MsgN(string.format("[BMX] city: %d buildings, %d quads in %d meshes, %d plants, %d subway lines (%.0f ms)",
-        #L.buildings, L.quads, #City.meshes, #City.plants, #L.lines, ms))
+    City.lastBuildMsg = string.format("[BMX] city: %d buildings, %d quads in %d meshes, %d plants, %d subway lines",
+        #L.buildings, L.quads, #City.meshes, #City.plants, #L.lines)
+    if not City._sliced then MsgN(string.format("%s (%.0f ms)", City.lastBuildMsg, ms)) end
     return true
 end
+
+-- AT JOIN, A SLICE A FRAME. ClientBuild in one go cost the frame the player
+-- arrived 130-260 ms (measured on a client, 2026-10-11); here it is run in a
+-- coroutine that gives way every few dozen quads (City.YieldIn, sh_city.lua) and
+-- is advanced BUILD_MS a frame. The city appears when it is done; nothing of it
+-- is drawn before (City.meshes is set last). ClientBuild itself stays whole, for
+-- bmx_city_rebuild and the tests.
+local BUILD_MS = 4
+local job, jobWork, jobFrames
+function City.ClientBuildSliced()
+    job = coroutine.create(function()
+        City.YieldIn(coroutine.running())
+        City._sliced = true
+        local ok = City.ClientBuild()
+        City._sliced = nil
+        return ok
+    end)
+    jobWork, jobFrames = 0, 0
+end
+function City.BuildStep(budgetMs)
+    if not job then return true end
+    local t0 = SysTime()
+    local deadline = t0 + (budgetMs or BUILD_MS) / 1000
+    jobFrames = jobFrames + 1
+    repeat                                       -- at least one slice a frame, however late it is
+        local ok, err = coroutine.resume(job)
+        if not ok then
+            City._sliced, job = nil, nil
+            ErrorNoHalt("[BMX] city build failed: " .. tostring(err) .. "\n")
+            return true
+        end
+        if coroutine.status(job) == "dead" then
+            job = nil
+            jobWork = jobWork + (SysTime() - t0)
+            if City.lastBuildMsg and City.meshes then
+                MsgN(string.format("%s (%.0f ms of work over %d frames)", City.lastBuildMsg, jobWork * 1000, jobFrames))
+            end
+            return true
+        end
+    until SysTime() >= deadline
+    jobWork = jobWork + (SysTime() - t0)
+    return false
+end
+function City.Building() return job ~= nil end
+function City.BuildJob() return job end          -- the coroutine, for the tests
+hook.Add("Think", "BMXCityBuild", function() if job then City.BuildStep() end end)
 
 function City.ClientClear()
     City.FreeMeshes()
@@ -1744,7 +1794,7 @@ function City.ClientClear()
     City.plants = nil
 end
 
-hook.Add("InitPostEntity", "BMXCity", function() City.ClientBuild() end)
+hook.Add("InitPostEntity", "BMXCity", function() City.ClientBuildSliced() end)
 
 -- PostDrawOpaqueRenderables(bDrawingDepth, bDrawingSkybox, isDraw3DSkybox).
 -- ONLY the depth pass and the 3D skybox's own pass are skipped. bDrawingSkybox
@@ -1794,5 +1844,5 @@ hook.Add("PostDrawOpaqueRenderables", "BMXCity", function(a, b, c) City.Draw(a, 
 
 concommand.Add("bmx_city_rebuild_client", function()
     City.ClientClear()
-    City.ClientBuild()
+    City.ClientBuildSliced()
 end, nil, "BMX: rebuild the city's meshes on this client")

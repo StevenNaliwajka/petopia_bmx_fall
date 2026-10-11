@@ -856,3 +856,56 @@ T.test("lamp glows and falling leaves draw on frames where GMod says bDrawingSky
     T.ok(sprites >= #City.Layout().lamps, "a glow at every lamp: " .. sprites)
     T.ok(begun >= 1, "the leaves drawn")
 end)
+
+
+-- The city was built in the frame the player arrived: 130-260 ms of Lua on a
+-- client (measured 2026-10-11). At join it is built in a coroutine that gives
+-- way every few dozen quads, a few ms a frame, and appears when it is done.
+T.test("at join the city is built a slice at a time: the same city, small slices, nothing drawn half built", function()
+    local function clientWith()
+        local sv, world = F.server()
+        local cl = F.client(world)
+        local env = cl.env
+        env.game.GetMap = function() return "gm_skatepark" end
+        local open, quads = false, 0
+        env.Mesh = function(mat) return { mat = mat, Draw = function() end, Destroy = function() end } end
+        env.MATERIAL_QUADS = 4
+        env.CreateMaterial = function(name, shader, params) return { name = name, shader = shader, params = params } end
+        env.mesh = {
+            Begin = function(m, kind, n) open = true quads = quads + n end,
+            Position = function() end, TexCoord = function() end, Color = function() end,
+            AdvanceVertex = function() end,
+            End = function() open = false end,
+        }
+        env.SysTime = os.clock
+        return env, function() return open end, function() return quads end
+    end
+    -- the whole build, as bmx_city_rebuild and the other tests have it
+    local envA, _, quadsA = clientWith()
+    T.ok(envA.BMX.City.ClientBuild(), "built whole")
+    local meshesA = #envA.BMX.City.meshes
+    -- the join build
+    local env, isOpen, quadsB = clientWith()
+    local City = env.BMX.City
+    T.ok(env.hook.GetTable().InitPostEntity.BMXCity, "joining starts it")
+    env.hook.GetTable().InitPostEntity.BMXCity()
+    T.ok(City.Building(), "building")
+    local job = City.BuildJob()
+    local k, worst, total, steps, openAtYield = 0, 0, 0, 0, 0
+    debug.sethook(job, function() k = k + 1 end, "", 1000)
+    while City.Building() and steps < 20000 do
+        k = 0
+        City.BuildStep(0.001)                        -- about one resume a step
+        steps = steps + 1
+        worst, total = math.max(worst, k), total + k
+        if isOpen() then openAtYield = openAtYield + 1 end
+        -- the meshes appear all at once (the trees follow a few frames later)
+        if City.meshes and #City.meshes ~= meshesA then T.ok(false, "drawn half built: " .. #City.meshes) break end
+    end
+    T.ok(not City.Building(), "finished, in " .. steps .. " steps")
+    T.ok(steps > 50, "over many frames, not one")
+    T.eq(openAtYield, 0, "never left a mesh open between frames")
+    T.eq(#City.meshes, meshesA, "the same meshes as built whole")
+    T.eq(quadsB(), quadsA(), "the same quads")
+    T.ok(worst < total / 30, string.format("no slice near the whole build: %dk of %dk instructions", worst, total))
+end)

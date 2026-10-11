@@ -273,7 +273,26 @@ end
 -- axis `w`, `len` along u and `hgt` along w. Texture coordinates are in
 -- repeats of the material's size, offset by (u0, v0) units, so panels line up
 -- across seams.
+-- BUILT IN SLICES ON THE CLIENT. The whole city is ~19,000 quads and 130-260 ms
+-- of Lua on a client, and was built in the frame the player arrived. Every quad
+-- comes through B:quad, so it counts them, and every SLICE_QUADS gives way --
+-- inside a coroutine named with City.YieldIn only (cl_city.lua's join build), so
+-- the server and the tests build straight through. City.Slice(n) counts n
+-- quads' worth of other work.
+local SLICE_QUADS = 48
+local slicing = setmetatable({}, { __mode = "k" })
+local sinceSlice = 0
+function City.YieldIn(co) slicing[co] = true end
+function City.Slice(n)
+    sinceSlice = sinceSlice + (n or 1)
+    if sinceSlice < SLICE_QUADS then return end
+    sinceSlice = 0
+    local co = coroutine.running()
+    if co and slicing[co] then coroutine.yield() end
+end
+
 function B:quad(mat, o, u, w, len, hgt, n, tint, u0, v0, cull)
+    City.Slice(1)
     if len <= 0.01 or hgt <= 0.01 then return end
     if cull ~= false and not self:facing(o[1], o[2], o[3], n[1], n[2], n[3]) then return end
     local M = City.Materials[mat]
@@ -1975,6 +1994,7 @@ end
 -- A floor quad, x0..x1 by y0..y1 at z, lit per vertex. Texture by world
 -- position, so neighbouring cells tile seamlessly.
 function B:floorQuad(mat, x0, y0, x1, y1, z, fl)
+    City.Slice(3)                -- a floor quad is lit at each corner: a few quads' work
     local M = City.Materials[mat]
     local list = self.faces[mat]
     if not list then list = {} self.faces[mat] = list end
@@ -2031,6 +2051,7 @@ function B:floor(fl, rng)
     end
     local z3 = z + 0.4
     for i = 1, fl.litter or 160 do
+        City.Slice(2)
         local x, y, spread
         if #seeds > 0 and rng.chance(0.75) then
             local s = seeds[rng.int(1, #seeds)]

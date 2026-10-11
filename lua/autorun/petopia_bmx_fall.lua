@@ -24,7 +24,7 @@ if SERVER then AddCSLuaFile() end
 
 BMX = BMX or {}
 PetopiaBMXFall = PetopiaBMXFall or {}
-PetopiaBMXFall.Version = "1.0.0"
+PetopiaBMXFall.Version = "1.0.1"
 
 local SHARED = {
     "petopia_bmx_fall/sh_city.lua",
