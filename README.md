@@ -61,6 +61,10 @@ Two things on this map are there for it:
   SkateGM can't see; this hands each one's boxes to SkateGM through its add-on
   hooks, so planting beds, piers and lamp posts stop the skater too.
 
+`tools/skategm/check.sh` measures it with SkateGM's own map loader (built
+from its repository, no engine or game data needed): the map's top surface on
+a grid, and the walls, against the collision SkateGM's engine gets.
+
 Known, not ours to fix in the map: SkateGM drops the top wedge of each
 transition beside its coping (the coping's flat top is level with it), and it
 builds faces from vbsp's bevel planes too, which can crack a funbox's sloped
