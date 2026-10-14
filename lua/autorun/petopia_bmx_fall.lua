@@ -18,13 +18,14 @@
         sv_city        the colliders (bmx_city_solid) and admin commands
         cl_city        draws the city, runs the subway trains
         cl_city_mood   its late-autumn sky, haze, lamp light, falling leaves
+        cl_skategm     the colliders handed to SkateGM, if it runs (Skate 3)
 ----------------------------------------------------------------------------]]
 
 if SERVER then AddCSLuaFile() end
 
 BMX = BMX or {}
 PetopiaBMXFall = PetopiaBMXFall or {}
-PetopiaBMXFall.Version = "1.0.1"
+PetopiaBMXFall.Version = "1.0.2"
 
 local SHARED = {
     "petopia_bmx_fall/sh_city.lua",
@@ -37,6 +38,7 @@ local SERVER_FILES = {
 local CLIENT_FILES = {
     "petopia_bmx_fall/cl_city.lua",
     "petopia_bmx_fall/cl_city_mood.lua",
+    "petopia_bmx_fall/cl_skategm.lua",
 }
 PetopiaBMXFall.Files = { shared = SHARED, server = SERVER_FILES, client = CLIENT_FILES }
 

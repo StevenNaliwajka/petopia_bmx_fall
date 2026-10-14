@@ -46,6 +46,26 @@ Options > BMX when the BMX addon is installed. Install the whole repository as
 a folder in `garrysmod/addons/` (it has `maps/` and `lua/`), and start with
 `+map petopia_bmx_fall` (with `+gamemode bmx` for the full BMX server).
 
+## SkateGM
+
+[SkateGM](https://github.com/the-schwilliam/SkateGM) (Skate 3 in Garry's Mod)
+builds its skater's collision from the BSP's brushes, not Source's physics.
+Two things on this map are there for it:
+
+- **The floor in pieces** (`mapsrc/build_vmf.py` `floor_cells`). Up to 1.0.1
+  the floor was one brush; SkateGM dropped half its top as "hidden" and a
+  skater in the park's north-east half fell straight through the floor
+  (Workshop comment, 2026-10-13).
+- **The city's colliders** (`lua/petopia_bmx_fall/cl_skategm.lua`). A
+  `bmx_city_solid` is a stand-in model with boxes made at runtime, which
+  SkateGM can't see; this hands each one's boxes to SkateGM through its add-on
+  hooks, so planting beds, piers and lamp posts stop the skater too.
+
+Known, not ours to fix in the map: SkateGM drops the top wedge of each
+transition beside its coping (the coping's flat top is level with it), and it
+builds faces from vbsp's bevel planes too, which can crack a funbox's sloped
+corner. Both are in SkateGM's own map loader.
+
 ## Tests
 
     lua5.1 tests/run.lua
@@ -66,6 +86,9 @@ Needs wine, python3 and the map SDK at `~/sdk/gmod-mapsdk` (override with
 SlimBSP's compilers is written at the top of `tools/build-map.sh`.
 
 To change a ramp, edit `RAMPS` in `mapsrc/build_vmf.py` and rebuild; commit the
-VMF and the BSP together. The light (sun, sky fill, the west-wall fill row,
+VMF and the BSP together. The floor is cut into pieces along every ramp's
+footprint (`floor_cells`), never one brush: SkateGM drops a big floor face it
+takes for hidden (see SkateGM below), and `tests/test_skategm.lua` fails if
+any floor or wall face would go. The light (sun, sky fill, the west-wall fill row,
 lamps, exposure) is at the top of the same file. If the city's lamps move, run
 `lua5.1 tools/city/lamps.lua > mapsrc/city_lamps.txt` and rebuild.

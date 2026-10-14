@@ -211,6 +211,34 @@ function BL.load(path)
     return BL.parse(d)
 end
 
+-- The BSP's brushes, as tools that read the map's collision see them (SkateGM
+-- builds its skater's world from these): { contents = n, planes = { {nx, ny,
+-- nz, dist}, ... } } each, inside where n . p <= dist. Every side counts,
+-- bevels too, as SkateGM takes them.
+function BL.brushes(path)
+    local f = assert(io.open(path, "rb"))
+    local d = f:read("*a")
+    f:close()
+    assert(d:sub(1, 4) == "VBSP", "not a VBSP file")
+    local po, pl = lump(d, 1)
+    local planes = {}
+    for i = 0, pl / 20 - 1 do
+        local o = po + i * 20
+        planes[i] = { f32(d, o), f32(d, o + 4), f32(d, o + 8), f32(d, o + 12) }
+    end
+    local so = lump(d, 19)                          -- brush sides: 8 bytes, the plane first
+    local bo, bl = lump(d, 18)                      -- brushes: first side, side count, contents
+    local out = {}
+    for i = 0, bl / 12 - 1 do
+        local o = bo + i * 12
+        local first, n = i32(d, o), i32(d, o + 4)
+        local b = { contents = i32(d, o + 8), planes = {} }
+        for k = 0, n - 1 do b.planes[#b.planes + 1] = planes[u16(d, so + (first + k) * 8)] end
+        out[#out + 1] = b
+    end
+    return out
+end
+
 -- Which layer of the park a sample belongs to:
 --   "floor"  the ground (the city's floor overlay covers it, but with the
 --            city off it is what riders see)

@@ -1,0 +1,108 @@
+--[[--------------------------------------------------------------------------
+    lua/petopia_bmx_fall/cl_skategm.lua
+
+    The city's colliders for SkateGM (github.com/the-schwilliam/SkateGM, the
+    Skate 3 add-on). SkateGM builds its skater's collision itself, not from
+    Source's physics: the map's brushes, and for each entity the physics
+    shape of its MODEL, looked up by model name. A bmx_city_solid is a
+    stand-in model (a 12 u cube) whose boxes are made at runtime
+    (PhysicsInitMultiConvex), so to SkateGM every planting bed, pier, lamp
+    post and tree trunk was that cube -- dropped as clutter -- and a skater
+    rode straight through them.
+
+    While SkateGM runs, each collider goes to it under its own name,
+    "petopia_bmx_fall:<solid>", with its own boxes, through the hooks SkateGM
+    has for add-ons (the ones its own Advanced Resizer support uses):
+        SkateGM.HullProviders   a name -> its convex pieces, in entity space
+        SkateGM.ExtraFeeds      the colliders near the skater, by that name
+        SkateGM.EntitySkippers  ...and not again as the stand-in cube
+    Without SkateGM nothing here runs. Bikes and players never see any of it:
+    they collide with the entity's own physics, as before.
+----------------------------------------------------------------------------]]
+
+local City = BMX.City
+local SK = City.SkateGM or {}
+City.SkateGM = SK
+
+SK.PREFIX = "petopia_bmx_fall:"
+SK.RADIUS = 2500          -- u: SkateGM's own reach for entities around the skater
+SK.byName = SK.byName or {}
+
+-- One box as a triangle soup, x0..x1 etc. (SkateGM turns each face outward.)
+function SK.BoxHull(x0, y0, z0, x1, y1, z1)
+    local out = {}
+    local function quad(a, b, c, d)
+        for _, v in ipairs({ a, b, c, a, c, d }) do
+            out[#out + 1] = v[1] out[#out + 1] = v[2] out[#out + 1] = v[3]
+        end
+    end
+    quad({ x0, y0, z1 }, { x1, y0, z1 }, { x1, y1, z1 }, { x0, y1, z1 })
+    quad({ x0, y0, z0 }, { x0, y1, z0 }, { x1, y1, z0 }, { x1, y0, z0 })
+    quad({ x1, y0, z0 }, { x1, y1, z0 }, { x1, y1, z1 }, { x1, y0, z1 })
+    quad({ x0, y0, z0 }, { x0, y0, z1 }, { x0, y1, z1 }, { x0, y1, z0 })
+    quad({ x0, y1, z0 }, { x0, y1, z1 }, { x1, y1, z1 }, { x1, y1, z0 })
+    quad({ x0, y0, z0 }, { x1, y0, z0 }, { x1, y0, z1 }, { x0, y0, z1 })
+    return out
+end
+
+local function isCollider(e)
+    return IsValid(e) and e:GetClass() == "bmx_city_solid"
+end
+
+-- A collider's boxes as SkateGM's convex pieces: the same boxes, in the same
+-- entity space, as its physics (ENT:Convexes, eight corners a box).
+function SK.Hulls(name)
+    if type(name) ~= "string" or name:sub(1, #SK.PREFIX) ~= SK.PREFIX then return nil end
+    local e = SK.byName[name]
+    local hulls = isCollider(e) and e:Convexes()
+    if not hulls then return SK.S and SK.S.LATER or nil end
+    local out = {}
+    for _, c in ipairs(hulls) do
+        local lo, hi = c[1], c[7]
+        out[#out + 1] = SK.BoxHull(lo.x, lo.y, lo.z, hi.x, hi.y, hi.z)
+    end
+    return out, false, "a petopia_bmx_fall city collider"
+end
+
+-- The colliders near the skater, placed where their entities stand.
+function SK.Feed(centre, list, sig)
+    local S = SK.S
+    for _, e in ipairs(ents.FindByClass("bmx_city_solid")) do
+        local solid = e.GetSolidName and e:GetSolidName() or ""
+        if solid ~= "" and e._built then
+            local p = S and S.ViewPos and S.ViewPos(e) or e:GetPos()
+            if p:DistToSqr(centre) < SK.RADIUS * SK.RADIUS then
+                local name = SK.PREFIX .. solid
+                local a = e:GetAngles()
+                SK.byName[name] = e
+                list[#list + 1] = { name, p.x, p.y, p.z, a.p, a.y, a.r }
+                sig[#sig + 1] = string.format("%s%d,%d,%d,%d,%d,%d", name, p.x / 2, p.y / 2, p.z / 2, a.p / 2, a.y / 2, a.r / 2)
+            end
+        end
+    end
+end
+
+function SK.Skip(e) return isCollider(e) end
+
+-- Hooked in once SkateGM is there (it may load after the map's Lua).
+function SK.Install(S)
+    if not (S and S.HullProviders) then return false end
+    if S.PetopiaBMXFall then return true end
+    S.PetopiaBMXFall = true
+    SK.S = S
+    S.ExtraFeeds = S.ExtraFeeds or {}
+    S.EntitySkippers = S.EntitySkippers or {}
+    table.insert(S.HullProviders, SK.Hulls)
+    table.insert(S.ExtraFeeds, SK.Feed)
+    table.insert(S.EntitySkippers, SK.Skip)
+    MsgN("[petopia_bmx_fall] the city's colliders handed to SkateGM")
+    return true
+end
+
+function SK.Start()
+    timer.Create("petopia_bmx_fall_skategm", 1, 0, function()
+        if SK.Install(SkateGM) then timer.Remove("petopia_bmx_fall_skategm") end
+    end)
+end
+
+if City.Def() then SK.Start() end

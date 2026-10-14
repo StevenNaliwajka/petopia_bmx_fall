@@ -29,6 +29,14 @@
 #
 # Needs wine (32-bit support) and python3. Other sessions share this box: vrad runs on
 # two threads.
+#
+# A box without i386 multiarch (no wine32): a WoW64 wine build runs these 32-bit
+# tools with 64-bit host libraries only -- e.g. Kron4ek's wine-11.0-amd64-wow64
+# (github.com/Kron4ek/Wine-Builds) unpacked and put first on PATH. The SDK's
+# garrysmod/, sourceengine/ and platform/ content is the same in the Linux GMod
+# dedicated server, so it can be copied from any GMod server box. Checked
+# 2026-10-14: that toolchain rebuilt the 1.0.1 VMF to the shipped BSP, every
+# geometry lump byte for byte and the light within rounding.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

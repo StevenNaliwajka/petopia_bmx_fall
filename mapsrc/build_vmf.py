@@ -386,16 +386,90 @@ def ramps():
     return out
 
 
-def shell():
+def footprints(brushes):
+    """Where the brushes stand on the floor, as (x0, y0, x1, y1) rectangles:
+    each brush's face at z = FLOOR, if it has one (posts under 16 u both ways
+    are left out), joined where they meet or overlap along a whole side -- a
+    ramp's wedges stand side by side, so a ramp comes out as one rectangle
+    (a halfpipe as two: its flat bottom is the floor)."""
+    out = []
+    for b in brushes:
+        for pts, _ in b.faces:
+            if all(p[2] == FLOOR for p in pts):
+                xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+                r = (min(xs), min(ys), max(xs), max(ys))
+                if max(r[2] - r[0], r[3] - r[1]) >= 16:
+                    out.append(r)
+    joined = True
+    while joined:
+        joined = False
+        out.sort()
+        for i, a in enumerate(out):
+            for j in range(i + 1, len(out)):
+                b = out[j]
+                if (a[1], a[3]) == (b[1], b[3]) and b[0] <= a[2] and a[0] <= b[2]:
+                    out[i] = (min(a[0], b[0]), a[1], max(a[2], b[2]), a[3])
+                elif (a[0], a[2]) == (b[0], b[2]) and b[1] <= a[3] and a[1] <= b[3]:
+                    out[i] = (a[0], min(a[1], b[1]), a[2], max(a[3], b[3]))
+                else:
+                    continue
+                del out[j]
+                joined = True
+                break
+            if joined:
+                break
+    return out
+
+
+def floor_cells(x0, y0, x1, y1, covered):
+    """The floor rectangle cut into rectangles that each lie either wholly
+    under the `covered` footprints or wholly clear of them -- never half under
+    a ramp.
+
+    WHY (SkateGM, 2026-10-14): SkateGM builds its skater's collision from the
+    BSP's brushes, and drops a brush face as hidden when four points just in
+    front of it (its middle and three near its corners) are all inside other
+    brushes. The floor was ONE brush: its top face, two triangles over the
+    whole park, had the middle of one triangle under a funbox and its corners
+    in the walls and the east quarter pipe, so SkateGM dropped that triangle
+    -- the park's north-east half -- and a skater there fell through the
+    floor. Cut along every footprint's edges, an open piece's middle is open
+    floor and a covered piece is wholly under its ramp. Pieces are merged
+    back up the y bands where nothing changes, so there are few."""
+    ys = sorted({y0, y1} | {v for r in covered for v in (r[1], r[3]) if y0 < v < y1})
+    cells, growing = [], {}
+    for ya, yb in zip(ys, ys[1:]):
+        over = [r for r in covered if r[1] < yb and r[3] > ya]
+        xs = sorted({x0, x1} | {v for r in over for v in (r[0], r[2]) if x0 < v < x1})
+        nxt = {}
+        for xa, xb in zip(xs, xs[1:]):
+            under = any(r[0] < xb and r[2] > xa and r[1] < yb and r[3] > ya for r in covered)
+            i = growing.get((xa, xb, under))
+            if i is not None and cells[i][3] == ya:
+                cells[i] = (xa, cells[i][1], xb, yb)
+            else:
+                cells.append((xa, ya, xb, yb))
+                i = len(cells) - 1
+            nxt[(xa, xb, under)] = i
+        growing = nxt
+    return cells
+
+
+def shell(ramp_brushes):
     x0, y0, x1, y1 = BOX
     X0, Y0, X1, Y1 = x0 - WALL_T, y0 - WALL_T, x1 + WALL_T, y1 + WALL_T
-    out = [box(X0, Y0, FLOOR - 64, X1, Y1, FLOOR, MAT_NODRAW, top=MAT_FLOOR)]
     walls = [(X0, Y0, x0, Y1), (x1, Y0, X1, Y1), (x0, Y0, x1, y0), (x0, y1, x1, Y1)]
+    out = []
     for a, b, c, d in walls:
         out.append(box(a, b, FLOOR, c, d, WALL_TOP, MAT_WALL))
         out.append(box(a, b, WALL_TOP, c, d, CEIL, MAT_SKY))
     out.append(box(X0, Y0, CEIL, X1, Y1, CEIL + SKY_T, MAT_SKY))
-    return out
+    # the floor in pieces (floor_cells): one brush under the whole park loses
+    # half its top to SkateGM
+    covered = footprints(list(out) + list(ramp_brushes))
+    floor = [box(a, b, FLOOR - 64, c, d, FLOOR, MAT_NODRAW, top=MAT_FLOOR)
+             for a, b, c, d in floor_cells(X0, Y0, X1, Y1, covered)]
+    return floor + out
 
 
 # --------------------------------------------------------------------------
@@ -490,7 +564,8 @@ def main():
              'world\n{\n\t"id" "%d"\n\t"mapversion" "1"\n\t"classname" "worldspawn"\n'
              '\t"skyname" "%s"\n\t"detailmaterial" "detail/detailsprites"\n'
              '\t"detailvbsp" "detail.vbsp"\n\t"maxpropscreenwidth" "-1"\n' % (ids.next(), SKYNAME)]
-    for b in shell() + ramps():
+    rs = ramps()
+    for b in shell(rs) + rs:
         parts.append(b.vmf(ids))
     parts.append('}\n')
     parts += entities(ids)
