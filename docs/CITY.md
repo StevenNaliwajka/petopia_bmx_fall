@@ -126,7 +126,9 @@ SkateGM (the Skate 3 add-on) reads an entity's shape from its model, and a
 `bmx_city_solid`'s model is only a stand-in; `cl_skategm.lua` hands SkateGM
 each collider's real boxes, named `petopia_bmx_fall:<solid>`, through
 `SkateGM.HullProviders`, `SkateGM.ExtraFeeds` and `SkateGM.EntitySkippers`.
-It does nothing unless SkateGM is running.
+The same hooks hand it the park's surface patches (`cl_skategm_patches.lua`,
+`petopia_bmx_fall:surface/<n>`): the pieces of the ramps SkateGM's map loader
+leaves out (README, "SkateGM"). It does nothing unless SkateGM is running.
 
 ## The map: petopia_bmx_fall
 

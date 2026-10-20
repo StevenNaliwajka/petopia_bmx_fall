@@ -50,7 +50,7 @@ a folder in `garrysmod/addons/` (it has `maps/` and `lua/`), and start with
 
 [SkateGM](https://github.com/the-schwilliam/SkateGM) (Skate 3 in Garry's Mod)
 builds its skater's collision from the BSP's brushes, not Source's physics.
-Two things on this map are there for it:
+Three things on this map are there for it:
 
 - **The floor in pieces** (`mapsrc/build_vmf.py` `floor_cells`). Up to 1.0.1
   the floor was one brush; SkateGM dropped half its top as "hidden" and a
@@ -60,15 +60,35 @@ Two things on this map are there for it:
   `bmx_city_solid` is a stand-in model with boxes made at runtime, which
   SkateGM can't see; this hands each one's boxes to SkateGM through its add-on
   hooks, so planting beds, piers and lamp posts stop the skater too.
+- **The surface patches** (1.0.3, `lua/petopia_bmx_fall/cl_skategm_patches.lua`,
+  handed over by `cl_skategm.lua`). SkateGM's map loader still left out parts
+  of the ramps a skater rides, and the skater fell into the ramp: the top of
+  every transition beside its coping (its hidden-face step takes the coping's
+  flat top, level with the lip, for a floor over the face: a slot the length of
+  each quarter pipe, spine and the halfpipe, 62 u tall on its vert), and the
+  flat ramp's side where it overlaps the north-west quarter pipe. Those faces,
+  cut from the BSP's own, go to SkateGM as meshes through the same hooks. The
+  BSP is unchanged: where a bike rides and grinds is too.
 
 `tools/skategm/check.sh` measures it with SkateGM's own map loader (built
-from its repository, no engine or game data needed): the map's top surface on
-a grid, and the walls, against the collision SkateGM's engine gets.
+from its repository, no engine or game data needed), with the patches fed to
+it as the game feeds them: the map's top surface on a grid, the walls, and
+every open piece of every brush face against the collision SkateGM's engine
+gets. 1.0.3, at each of SkateGM's smoothing presets: 0 spots with no ground,
+0 rays through the walls (without the patches: 371 spots, every one beside a
+coping, and 217,929 sq u of ramp surface missing).
 
-Known, not ours to fix in the map: SkateGM drops the top wedge of each
-transition beside its coping (the coping's flat top is level with it), and it
-builds faces from vbsp's bevel planes too, which can crack a funbox's sloped
-corner. Both are in SkateGM's own map loader.
+Known, left: SkateGM builds faces from vbsp's bevel planes too, which cracks
+funbox 2's west slope along its corners (triangles of up to ~100 sq u). It
+cannot be patched: SkateGM finds an entity's grind rails from its own
+triangles alone, so a patch on a slope one can stand on grows a rail along
+every edge. It goes with SkateGM taking only a brush's real sides (vbsp flags
+the bevels), or a funbox vbsp gives no near-twin bevel (a BSP rebuild).
+
+After a BSP change, regenerate the patches with
+`GEN=lua/petopia_bmx_fall/cl_skategm_patches.lua tools/skategm/check.sh`;
+`tests/test_skategm.lua` fails on a patch that is not on a face of the map, one
+that can be stood on, or a transition top SkateGM hides that no patch covers.
 
 ## Tests
 
@@ -93,6 +113,7 @@ To change a ramp, edit `RAMPS` in `mapsrc/build_vmf.py` and rebuild; commit the
 VMF and the BSP together. The floor is cut into pieces along every ramp's
 footprint (`floor_cells`), never one brush: SkateGM drops a big floor face it
 takes for hidden (see SkateGM below), and `tests/test_skategm.lua` fails if
-any floor or wall face would go. The light (sun, sky fill, the west-wall fill row,
+any floor or wall face would go. Then regenerate SkateGM's surface patches
+(SkateGM, above). The light (sun, sky fill, the west-wall fill row,
 lamps, exposure) is at the top of the same file. If the city's lamps move, run
 `lua5.1 tools/city/lamps.lua > mapsrc/city_lamps.txt` and rebuild.

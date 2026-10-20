@@ -215,7 +215,9 @@ end
 -- builds its skater's world from these): { contents = n, planes = { {nx, ny,
 -- nz, dist}, ... } } each, inside where n . p <= dist. Every side counts,
 -- bevels too, as SkateGM takes them.
-function BL.brushes(path)
+-- noBevels: without the sides vbsp adds for Source's hull traces (dbrushside_t's
+-- bevel flag): the brush as built, not as SkateGM reads it (it takes them too).
+function BL.brushes(path, noBevels)
     local f = assert(io.open(path, "rb"))
     local d = f:read("*a")
     f:close()
@@ -233,7 +235,10 @@ function BL.brushes(path)
         local o = bo + i * 12
         local first, n = i32(d, o), i32(d, o + 4)
         local b = { contents = i32(d, o + 8), planes = {} }
-        for k = 0, n - 1 do b.planes[#b.planes + 1] = planes[u16(d, so + (first + k) * 8)] end
+        for k = 0, n - 1 do
+            local side = so + (first + k) * 8
+            if not (noBevels and i16(d, side + 6) ~= 0) then b.planes[#b.planes + 1] = planes[u16(d, side)] end
+        end
         out[#out + 1] = b
     end
     return out
