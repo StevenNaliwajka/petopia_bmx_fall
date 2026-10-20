@@ -50,7 +50,7 @@ a folder in `garrysmod/addons/` (it has `maps/` and `lua/`), and start with
 
 [SkateGM](https://github.com/the-schwilliam/SkateGM) (Skate 3 in Garry's Mod)
 builds its skater's collision from the BSP's brushes, not Source's physics.
-Three things on this map are there for it:
+Four things on this map are there for it:
 
 - **The floor in pieces** (`mapsrc/build_vmf.py` `floor_cells`). Up to 1.0.1
   the floor was one brush; SkateGM dropped half its top as "hidden" and a
@@ -69,21 +69,26 @@ Three things on this map are there for it:
   flat ramp's side where it overlaps the north-west quarter pipe. Those faces,
   cut from the BSP's own, go to SkateGM as meshes through the same hooks. The
   BSP is unchanged: where a bike rides and grinds is too.
+- **Funbox 2's west slope** (1.0.4, `mapsrc/build_vmf.py` `funbox()`).
+  SkateGM builds faces from vbsp's bevel planes too, and every funbox carries
+  bevel sides a hair (~1.4e-5) off its slopes; SkateGM's corner solves between
+  those near-twins are ill-conditioned, and on that slope they cut it away
+  along its corner (67 pieces, 823 sq u, 6 spots a skater fell through). It
+  can't be patched (a walkable patch grows a grind rail along every edge), so
+  the BSP changes instead: that slope's top edge is 1 u further out (a run of
+  127, not 128), and SkateGM keeps it whole. Nothing else in the map moved
+  (207 of the 208 brushes are the same, side for side); the slope moved at
+  most 0.56 u. SkateGM taking only a brush's real sides (vbsp flags the
+  bevels) would make it unnecessary.
 
 `tools/skategm/check.sh` measures it with SkateGM's own map loader (built
 from its repository, no engine or game data needed), with the patches fed to
 it as the game feeds them: the map's top surface on a grid, the walls, and
 every open piece of every brush face against the collision SkateGM's engine
-gets. 1.0.3, at each of SkateGM's smoothing presets: 0 spots with no ground,
-0 rays through the walls (without the patches: 371 spots, every one beside a
-coping, and 217,929 sq u of ramp surface missing).
-
-Known, left: SkateGM builds faces from vbsp's bevel planes too, which cracks
-funbox 2's west slope along its corners (triangles of up to ~100 sq u). It
-cannot be patched: SkateGM finds an entity's grind rails from its own
-triangles alone, so a patch on a slope one can stand on grows a rail along
-every edge. It goes with SkateGM taking only a brush's real sides (vbsp flags
-the bevels), or a funbox vbsp gives no near-twin bevel (a BSP rebuild).
+gets. 1.0.4, at each of SkateGM's smoothing presets: 0 spots with no ground,
+0 pieces of surface missing, 0 rays through the walls (without the patches:
+371 spots, every one beside a coping, and 217,929 sq u of ramp surface
+missing).
 
 After a BSP change, regenerate the patches with
 `GEN=lua/petopia_bmx_fall/cl_skategm_patches.lua tools/skategm/check.sh`;

@@ -82,7 +82,7 @@ RAMPS = [
     ("funbox2",       572,  -259, 1118,   222, 150, None),
     ("quarterpipe3",  811,   475, 1431,   774, 237, "+y"),
     ("spiner2",      1386, -1423, 1963, -1047, 179, "y"),
-    ("funbox2",      1855,  -290, 2401,   191, 150, None),
+    ("funbox2",      1855,  -290, 2401,   191, 150, 127),   # the west slope's run: see funbox() (1.0.4)
     ("flatramp",     2151, -1009, 2437,  -655, 177, "+y"),
     ("funbox2",      2398, -1516, 2944, -1095, 150, None),   # and 60 u shallower: the far south bed's lane
     ("spiner2",      2437, -1082, 2812,  -505, 179, "x"),
@@ -201,10 +201,11 @@ def prism(profile, place, w0, w1, mats):
     return Brush(faces)
 
 
-def frustum(x0, y0, x1, y1, z0, z1, inset, mat_top, mat_side):
+def frustum(x0, y0, x1, y1, z0, z1, inset, mat_top, mat_side, inset_w=None):
+    iw = inset if inset_w is None else inset_w       # the west side's own, if given (funbox)
     b = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)]
-    t = [(x0 + inset, y0 + inset, z1), (x1 - inset, y0 + inset, z1),
-         (x1 - inset, y1 - inset, z1), (x0 + inset, y1 - inset, z1)]
+    t = [(x0 + iw, y0 + inset, z1), (x1 - inset, y0 + inset, z1),
+         (x1 - inset, y1 - inset, z1), (x0 + iw, y1 - inset, z1)]
     faces = [(t, mat_top), (b, MAT_NODRAW)]
     for i in range(4):
         j = (i + 1) % 4
@@ -323,8 +324,29 @@ def flatramp(out, x0, y0, x1, y1, zt, facing, slope=0.65):
     out.append(prism([(s1, FLOOR), (L, FLOOR), (L, zt), (s1, zt)], place, w0, w1, side_mats({2})))
 
 
-def funbox(out, x0, y0, x1, y1, zt):
-    out.append(frustum(x0, y0, x1, y1, FLOOR, zt, 128, MAT_BOX, MAT_RAMP))
+def funbox(out, x0, y0, x1, y1, zt, inset_w=None):
+    """A frustum: slopes of 128 u run up to a flat top. `inset_w` gives the
+    west slope its own run (funbox 2: 127, 1.0.4).
+
+    WHY FUNBOX 2'S WEST SLOPE IS 1 U SHORTER. vbsp gives a brush edge bevels:
+    for each slanted edge, the planes through it parallel to an axis, kept if
+    the whole brush is behind one. A funbox's corner edge lies in two slopes
+    that ARE parallel to an axis, so two of those planes are the slopes
+    themselves, and vbsp drops them as already there unless its float
+    windings put them past its plane tolerance -- which at these coordinates
+    they all are (~1.4e-5 off): every funbox carries bevel sides a hair off its
+    slopes. Engines skip bevels; SkateGM builds faces from every side, and
+    its corner solves between those near-twin planes are ill-conditioned:
+    whether stray points land on a slope (cutting it, along the corner) comes
+    down to the exact numbers. On funbox 2's west slope they did (67 pieces,
+    823 sq u, 6 spots a skater fell through; tools/skategm/check.sh); on
+    funboxes 1 and 3 they don't. With the west slope's top edge 1 u further out
+    (run 127, so 86 over 127 instead of 128), SkateGM's own loader keeps every
+    piece of it at all three smoothing presets, and the rest of the map is
+    unchanged. Tried and not taken: tilting every slope off its axis (a
+    pinwheel, no near-twin bevel at all) left the base off the floor's cell
+    edges, and SkateGM grew grind rails along it."""
+    out.append(frustum(x0, y0, x1, y1, FLOOR, zt, 128, MAT_BOX, MAT_RAMP, inset_w))
 
 
 def rail(out, x0, y0, x1, y1, zt):
@@ -374,7 +396,7 @@ def ramps():
         elif name.startswith("flatramp"):
             flatramp(out, x0, y0, x1, y1, zt, f)
         elif name.startswith("funbox"):
-            funbox(out, x0, y0, x1, y1, zt)
+            funbox(out, x0, y0, x1, y1, zt, f)
         elif name.startswith("rail"):
             rail(out, x0, y0, x1, y1, zt)
         elif name.startswith("kicker"):

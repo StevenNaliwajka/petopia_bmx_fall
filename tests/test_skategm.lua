@@ -761,3 +761,42 @@ T.test("skategm: the stand-in cube is never sent, and other entities are left to
     T.eq(S.HullProviders[1]("models/props_c17/oildrum001.mdl"), nil, "other models: not ours")
     T.eq(S.HullProviders[1](SK.PREFIX .. "nothing_by_this_name"), S.LATER, "a collider not seen yet: asked again later")
 end)
+
+-- FUNBOX 2'S WEST SLOPE RUNS 127 U, NOT 128 (1.0.4). Every funbox carries bevel sides a
+-- hair off its slopes (vbsp's float windings), and SkateGM, which builds faces from
+-- every side, cut funbox 2's west slope away along its corner: 67 pieces, 823 sq u, six
+-- spots a skater fell through (tools/skategm/check.sh). With that slope's top edge 1 u
+-- further out its loader keeps the slope whole at every smoothing preset (build_vmf.py,
+-- funbox()). Pinned here so a tidy-up of the funboxes cannot put the crack back.
+T.test("skategm: funbox 2's west slope runs 127 u and the other funbox slopes 128 (1.0.4)", function()
+    local brushes = prepare(BL.brushes(ROOT .. "/maps/petopia_bmx_fall.bsp", true))
+    local function funbox(x0, y0, x1, y1)
+        for _, b in ipairs(brushes) do
+            local near = function(a, v) return math.abs(a - v) < 0.01 end
+            if near(b.lo[1], x0) and near(b.lo[2], y0) and near(b.hi[1], x1) and near(b.hi[2], y1)
+                and near(b.lo[3], 64) and near(b.hi[3], 150) then return b end
+        end
+    end
+    -- each slope's run, from its plane: rise 86 over run r, so r = 86 * nz / |n across|
+    local function runs(b)
+        local out = {}
+        for _, p in ipairs(b.planes) do
+            local side = math.abs(p[1]) > 0.4 and (p[1] < 0 and "west" or "east")
+                or math.abs(p[2]) > 0.4 and (p[2] < 0 and "south" or "north") or nil
+            if side then out[side] = 86 * p[3] / math.max(math.abs(p[1]), math.abs(p[2])) end
+        end
+        return out
+    end
+    for _, fb in ipairs({ { "funbox 1", 572, -259, 1118, 222, 128 }, { "funbox 2", 1855, -290, 2401, 191, 127 },
+                          { "funbox 3", 2398, -1516, 2944, -1095, 128 } }) do
+        local b = funbox(fb[2], fb[3], fb[4], fb[5])
+        T.ok(b, fb[1] .. " is in the BSP where the map puts it")
+        if b then
+            local r = runs(b)
+            T.ok(math.abs((r.west or 0) - fb[6]) < 0.05, string.format("%s: the west slope runs %.2f u (want %d)", fb[1], r.west or -1, fb[6]))
+            for _, side in ipairs({ "east", "south", "north" }) do
+                T.ok(math.abs((r[side] or 0) - 128) < 0.05, string.format("%s: the %s slope runs %.2f u", fb[1], side, r[side] or -1))
+            end
+        end
+    end
+end)

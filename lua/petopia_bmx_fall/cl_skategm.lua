@@ -35,10 +35,12 @@
     face clear of the coping goes: that part passes the hidden-face step, and
     the coping covers the rest. The BSP is unchanged, so where a bike rides and
     grinds is too.
-    Left: funbox 2's west slope, cracked along its corners in SkateGM (faces
-    built from vbsp's bevel planes too). A slope one can stand on cannot be
-    patched: SkateGM finds an entity's grind rails from its own triangles
-    alone, and every edge of such a patch became a rail across the slope.
+    Not patched: funbox 2's west slope, which SkateGM cracked along its corner
+    (it builds faces from vbsp's bevel planes too, and every funbox has some a
+    hair off its slopes). A slope one can stand on cannot be patched: SkateGM
+    finds an entity's grind rails from its own triangles alone, and every edge
+    of such a patch became a rail across the slope. The map itself fixes it
+    (1.0.4): that slope's top edge is 1 u further out (build_vmf.py funbox()).
 ----------------------------------------------------------------------------]]
 
 local City = BMX.City

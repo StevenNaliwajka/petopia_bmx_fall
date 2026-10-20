@@ -19,12 +19,15 @@
 # triangles lying on it -- missing unless SkateGM's own ledge ramps or curves
 # stand over it. TOP=600 starts the grid's scan under the sky (quicker).
 #
-# 1.0.3 with SkateGM 9.0 (ea59a34), at smoothing 0, 1 and 2: 0 rays through
-# the walls, the grind rails the same as without the patches, and missing only
-# funbox 2's west slope, cracked along its corners (SkateGM builds faces from
-# vbsp's bevel planes too): 6 spots with no ground, ~820 sq u in small pieces.
-# A slope one can stand on can't be patched (SkateGM finds an entity's rails
-# from its own triangles, so every edge of the patch was a rail). Without the
+# 1.0.4 with SkateGM 9.0 (ea59a34), at smoothing 0, 1 and 2: 0 spots with no
+# ground, 0 pieces of surface missing, 0 rays through the walls, 74 grind rails
+# (1.0.3: 73; the new one is funbox 2's north foot, a rail SkateGM finds along
+# every side of funboxes 1 and 3 too). 1.0.3 was missing funbox 2's west slope,
+# cracked along its corner (SkateGM builds faces from vbsp's bevel planes too,
+# and every funbox has some a hair off its slopes): 6 spots, 823 sq u. A slope
+# one can stand on can't be patched (SkateGM finds an entity's rails from its
+# own triangles, so every edge of the patch was a rail); 1.0.4 moves that
+# slope's top edge 1 u out instead (build_vmf.py funbox()). Without the
 # patches: 371 spots with no ground, 365 of them beside a coping (SkateGM's
 # hidden-face step takes the top wedge of a transition whose coping's flat top
 # is level with it), and 85 pieces of surface missing (217,929 sq u): those
